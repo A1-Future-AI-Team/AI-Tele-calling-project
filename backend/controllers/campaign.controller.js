@@ -4,6 +4,7 @@ import csv from 'csv-parser';
 import Campaign from '../models/campaign.model.js';
 import Contact from '../models/contact.model.js';
 import simulatorService from '../services/simulator.service.js';
+import twilioService from '../services/twilio.service.js';
 
 class CampaignController {
     /**
@@ -96,10 +97,10 @@ class CampaignController {
                 const savedContacts = await Contact.insertMany(contactDocuments);
                 console.log(`👥 ${savedContacts.length} contacts saved to database`);
 
-                // Start call simulation in the background
-                console.log(`🎯 Starting call simulation for campaign: ${savedCampaign._id}`);
-                simulatorService.simulateCalls(savedCampaign._id).catch(error => {
-                    console.error('❌ Call simulation error:', error);
+                // Start REAL Twilio calls in the background
+                console.log(`📞 Starting REAL Twilio calls for campaign: ${savedCampaign._id}`);
+                makeRealCalls(savedCampaign._id, savedCampaign.language, savedCampaign.objective, savedCampaign.sampleFlow).catch(error => {
+                    console.error('❌ Real call error:', error);
                 });
 
                 // Return success response
@@ -230,6 +231,99 @@ class CampaignController {
             });
         }
     }
+}
+
+/**
+ * Make real Twilio calls to all contacts in a campaign (standalone function)
+ * @param {string} campaignId - Campaign ID
+ * @param {string} language - Campaign language
+ * @param {string} objective - Campaign objective  
+ * @param {string} sampleFlow - Campaign sample flow
+ */
+async function makeRealCalls(campaignId, language, objective, sampleFlow) {
+        try {
+            console.log(`📞 Starting real calls for campaign: ${campaignId}`);
+            
+            // Get all contacts for this campaign
+            const contacts = await Contact.find({ 
+                campaignId: campaignId, 
+                status: 'PENDING' 
+            });
+            
+            if (contacts.length === 0) {
+                console.log('⚠️ No pending contacts found for campaign');
+                return;
+            }
+            
+            console.log(`📞 Found ${contacts.length} contacts to call`);
+            console.log(`📋 Campaign will use: Language=${language}, Objective=${objective}`);
+            
+            // Make calls to each contact with delay between calls
+            // Each call will use the voice-response endpoint with proper campaign context
+            for (let i = 0; i < contacts.length; i++) {
+                const contact = contacts[i];
+                
+                try {
+                    console.log(`📞 [${i + 1}/${contacts.length}] Calling ${contact.phone} (${contact.name})...`);
+                    
+                    // Update contact status to CALLING
+                    await Contact.findByIdAndUpdate(contact._id, { 
+                        status: 'CALLING',
+                        callStartTime: new Date()
+                    });
+                    
+                    // Make real Twilio call using campaign-based voice response
+                    const callResult = await twilioService.makeCallLegacy(
+                        contact.phone,
+                        campaignId
+                    );
+                    
+                    if (callResult.success) {
+                        console.log(`✅ [${i + 1}] Call initiated to ${contact.phone} - SID: ${callResult.callSid}`);
+                        
+                        // Update contact with call details
+                        await Contact.findByIdAndUpdate(contact._id, {
+                            status: 'CALLED',
+                            callSid: callResult.callSid,
+                            callTime: new Date(),
+                            lastCallResult: 'SUCCESS'
+                        });
+                        
+                    } else {
+                        console.error(`❌ [${i + 1}] Call failed to ${contact.phone}: ${callResult.error}`);
+                        
+                        // Update contact with error
+                        await Contact.findByIdAndUpdate(contact._id, {
+                            status: 'FAILED',
+                            lastCallResult: 'FAILED',
+                            errorMessage: callResult.error
+                        });
+                    }
+                    
+                } catch (contactError) {
+                    console.error(`❌ Error calling ${contact.phone}:`, contactError.message);
+                    
+                    // Update contact with error
+                    await Contact.findByIdAndUpdate(contact._id, {
+                        status: 'FAILED',
+                        lastCallResult: 'ERROR',
+                        errorMessage: contactError.message
+                    });
+                }
+                
+                // Add delay between calls to avoid rate limiting (2 seconds)
+                if (i < contacts.length - 1) {
+                    console.log('⏳ Waiting 2 seconds before next call...');
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            }
+            
+            console.log(`✅ Real calling completed for campaign: ${campaignId}`);
+            
+        } catch (error) {
+            console.error('❌ Error in makeRealCalls:', error);
+            throw error;
+        }
 }
 
 export default new CampaignController(); 
