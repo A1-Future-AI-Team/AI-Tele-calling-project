@@ -442,33 +442,45 @@ class DashboardManager {
         const item = document.createElement('div');
         item.className = 'activity-item';
 
-        // Map status to display text and class
+        // Map status to display text, class, and color
         const statusMapping = {
-            'success': { text: 'SUCCESS', class: 'status-success' },
-            'failed': { text: 'FAILED', class: 'status-failed' },
-            'pending': { text: 'PENDING', class: 'status-pending' }
+            'success': { text: 'SUCCESS', color: '#10b981' },
+            'completed': { text: 'COMPLETED', color: '#10b981' },
+            'failed': { text: 'FAILED', color: '#ef4444' },
+            'busy': { text: 'BUSY', color: '#f59e0b' },
+            'pending': { text: 'PENDING', color: '#f59e0b' },
+            'in-progress': { text: 'IN PROGRESS', color: '#f59e0b' }
         };
+        const statusInfo = statusMapping[(activity.status||'').toLowerCase()] || { text: (activity.status || 'UNKNOWN').toUpperCase(), color: '#a0aec0' };
 
-        const statusInfo = statusMapping[activity.status] || { text: 'UNKNOWN', class: 'status-neutral' };
-        
-        const transcriptLink = activity.transcriptId 
-            ? `<a href="/transcripts/${activity.transcriptId}" class="transcript-link">
+        // Use populated contact and campaign info if available
+        const contact = activity.contactId || {};
+        const campaign = activity.campaignId || {};
+        const phone = contact.phone || activity.to || 'Unknown';
+        const name = contact.name || 'Unknown';
+        let campaignName = campaign.objective || 'Unknown';
+        if (campaignName.length > 32) campaignName = campaignName.slice(0, 32) + '...';
+        const date = activity.createdAt ? new Date(activity.createdAt).toLocaleString() : 'Unknown';
+        const transcriptId = contact.transcriptId;
+
+        const transcriptLink = transcriptId
+            ? `<a href="/transcripts/${transcriptId}" class="transcript-link">
                  <i class="fas fa-file-text"></i> View Transcript
                </a>`
             : '<span class="transcript-link no-transcript">No transcript</span>';
 
         item.innerHTML = `
-            <div class="activity-info">
-                <div class="activity-phone">${activity.phone}</div>
-                <div class="activity-meta">
-                    <span class="campaign-type">${activity.campaign}</span>
-                    <span class="activity-date">${activity.date}</span>
+            <div class="activity-info" style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+                <div style="font-weight: 600; font-size: 1.1rem;">
+                    ${phone} <span style="font-weight: 400; color: #444;">${name}</span>
                 </div>
+                <span class="activity-status-badge" style="font-size: 0.98rem; letter-spacing: 0.02em; padding: 0.18em 0.7em; border-radius: 6px; font-weight: 500; background: ${statusInfo.color}20; color: ${statusInfo.color};">${statusInfo.text}</span>
             </div>
-            <div class="activity-actions">
-                <span class="activity-status ${statusInfo.class}">
-                    ${statusInfo.text}
-                </span>
+            <div class="activity-meta" style="margin-top: 0.3rem; font-size: 1rem; color: #4f46e5; font-weight: 500;">
+                ${campaignName}
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.2rem;">
+                <div style="font-size: 0.98rem; color: #888;">${date}</div>
                 ${transcriptLink}
             </div>
         `;
