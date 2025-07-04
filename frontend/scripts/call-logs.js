@@ -58,12 +58,12 @@ function createActivityItem(activity) {
 
     // Status badge colors
     const statusMapping = {
-        'success': { text: 'SUCCESS', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
-        'completed': { text: 'COMPLETED', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
-        'failed': { text: 'FAILED', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
-        'busy': { text: 'BUSY', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-        'pending': { text: 'PENDING', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-        'in-progress': { text: 'IN PROGRESS', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' }
+        'success': { text: 'SUCCESS', color: '#10b981'},
+        'completed': { text: 'COMPLETED', color: '#10b981'},
+        'failed': { text: 'FAILED', color: '#ef4444'},
+        'busy': { text: 'BUSY', color: '#f59e0b'},
+        'pending': { text: 'PENDING', color: '#f59e0b'},
+        'in-progress': { text: 'IN PROGRESS', color: '#f59e0b'}
     };
     const statusInfo = statusMapping[(activity.status||'').toLowerCase()] || { text: (activity.status || 'UNKNOWN').toUpperCase(), color: '#64748b', bg: 'rgba(100,116,139,0.10)' };
 
@@ -104,6 +104,59 @@ function createActivityItem(activity) {
     return item;
 }
 
+function isMobile() {
+    return window.innerWidth <= 600;
+}
+
+function createMobileCallLogItem(activity) {
+    const item = document.createElement('div');
+    item.className = 'call-log-card';
+
+    // Status badge colors
+    const statusMapping = {
+        'success': { text: 'SUCCESS', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
+        'completed': { text: 'COMPLETED', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
+        'failed': { text: 'FAILED', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+        'busy': { text: 'BUSY', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+        'pending': { text: 'PENDING', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+        'in-progress': { text: 'IN PROGRESS', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+        'answered': { text: 'ANSWERED', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
+        'no answer': { text: 'NO ANSWER', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' }
+    };
+    const statusKey = (activity.status||'').toLowerCase();
+    const statusInfo = statusMapping[statusKey] || { text: (activity.status || 'UNKNOWN').toUpperCase(), color: '#64748b', bg: 'rgba(100,116,139,0.10)' };
+
+    // Data extraction
+    const contact = activity.contactId || {};
+    const campaign = activity.campaignId || {};
+    const phone = contact.phone || activity.to || 'Unknown';
+    let campaignName = campaign.objective || 'Unknown';
+    if (campaignName.length > 48) campaignName = campaignName.slice(0, 48) + '...';
+    const date = activity.createdAt ? new Date(activity.createdAt).toLocaleString() : 'Unknown';
+    const duration = activity.duration ? (activity.duration >= 60 ? `${Math.floor(activity.duration/60)}:${('0'+(activity.duration%60)).slice(-2)}` : `0:${('0'+activity.duration).slice(-2)}`) : '';
+    const transcriptId = contact.transcriptId;
+    const transcript = transcriptId
+        ? `<a href="/transcripts/${transcriptId}" class="transcript-link" style="color:#4f46e5;font-weight:500;text-decoration:none;"><i class="fas fa-file-text"></i> View Transcript</a>`
+        : '<span class="call-log-transcript">No transcript</span>';
+
+    item.innerHTML = `
+        <div class="call-log-main">
+            <div class="call-log-row" style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+                <span class="call-log-phone">${phone}</span>
+                <span class="call-log-status ${statusKey}" style="background:${statusInfo.bg};color:${statusInfo.color};margin-left:1em;white-space:nowrap;">${statusInfo.text}</span>
+            </div>
+            <div class="call-log-meta" style="display:flex;align-items:center;gap:0.5em;margin-top:0.3em;flex-wrap:wrap;">
+                <span class="call-log-campaign">${campaignName}</span>
+                <span class="call-log-date">${date}</span>
+                ${duration ? `<span class="call-log-duration">${duration}</span>` : ''}
+            </div>
+            <div class="call-log-transcript" style="margin-top:0.5em;">${!transcriptId ? 'No transcript' : transcript}</div>
+        </div>
+    `;
+    return item;
+}
+
+// Patch renderCallLogs to use mobile or desktop rendering
 function renderCallLogs(logs) {
     const activityContent = document.getElementById('activityContent');
     if (!activityContent) return;
@@ -114,7 +167,7 @@ function renderCallLogs(logs) {
     const activityList = document.createElement('div');
     activityList.className = 'activity-list';
     logs.forEach(log => {
-        const item = createActivityItem(log);
+        const item = isMobile() ? createMobileCallLogItem(log) : createActivityItem(log);
         activityList.appendChild(item);
     });
     activityContent.innerHTML = '';

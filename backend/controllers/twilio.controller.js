@@ -184,16 +184,77 @@ class TwilioController {
             let contactFound = null;
             let campaignFound = null;
             
-            // STEP 1: Find the contact by phone number and campaign context
+            // STEP 1: Find campaign context FIRST (this is the source of truth)
+            let campaignId = null;
+            
             try {
-                console.log('🔍 [CONTACT LOOKUP] Looking for contact with phone:', To);
+                // Priority order for campaignId:
+                // 1. Query params (from webhook URL when call was initiated)
+                // 2. Request body
+                // 3. Fallback to contact lookup (but this is unreliable for duplicate phone numbers)
                 
-                // First, try to find contact by phone number
-                const contact = await Contact.findOne({ phone: To });
+                if (req.query.campaignId) {
+                    campaignId = req.query.campaignId;
+                    console.log('✅ [CAMPAIGN LOOKUP] Using campaignId from query params:', campaignId);
+                } else if (req.body.campaignId) {
+                    campaignId = req.body.campaignId;
+                    console.log('✅ [CAMPAIGN LOOKUP] Using campaignId from request body:', campaignId);
+                }
+                
+                if (campaignId) {
+                    const campaign = await Campaign.findById(campaignId);
+                    if (campaign) {
+                        campaignFound = campaign;
+                        console.log('✅ [CAMPAIGN LOOKUP] Found campaign:', campaign.objective);
+                    } else {
+                        console.log('⚠️ [CAMPAIGN LOOKUP] Campaign not found for ID:', campaignId);
+                    }
+                } else {
+                    console.log('⚠️ [CAMPAIGN LOOKUP] No campaignId found in webhook');
+                }
+            } catch (campaignErr) {
+                console.error('❌ [CAMPAIGN LOOKUP] Error finding campaign:', campaignErr);
+            }
+            
+            // STEP 2: Find the correct contact using BOTH phone number AND campaignId
+            
+            try {
+                console.log('🔍 [CONTACT LOOKUP] Looking for contact with phone:', To, 'and campaignId:', campaignId);
+                
+                let contact = null;
+                
+                if (campaignId) {
+                    // CRITICAL FIX: Find contact by BOTH phone number AND campaignId
+                    // This prevents the bug where same phone number in different campaigns gets mixed up
+                    contact = await Contact.findOne({ 
+                        phone: To, 
+                        campaignId: campaignId 
+                    });
+                    
+                    if (contact) {
+                        console.log('✅ [CONTACT LOOKUP] Found contact by phone + campaignId:', contact.name, 'Campaign:', contact.campaignId);
+                    } else {
+                        console.log('⚠️ [CONTACT LOOKUP] No contact found for phone + campaignId combination');
+                    }
+                } else {
+                    // Fallback: if no campaignId in webhook, try to find by phone only
+                    // This is less reliable but maintains backward compatibility
+                    contact = await Contact.findOne({ phone: To });
+                    
+                    if (contact) {
+                        console.log('⚠️ [CONTACT LOOKUP] Found contact by phone only (fallback):', contact.name, 'Campaign:', contact.campaignId);
+                        // Use this contact's campaignId as fallback
+                        if (!campaignId && contact.campaignId) {
+                            campaignId = contact.campaignId;
+                            console.log('🔄 [CAMPAIGN LOOKUP] Using fallback campaignId from contact:', campaignId);
+                        }
+                    } else {
+                        console.log('⚠️ [CONTACT LOOKUP] No contact found for phone:', To);
+                    }
+                }
                 
                 if (contact) {
                     contactFound = contact;
-                    console.log('✅ [CONTACT LOOKUP] Found contact:', contact.name, 'Campaign:', contact.campaignId);
                     
                     // Update contact status based on call status
                     let contactStatus = 'PENDING';
@@ -226,42 +287,9 @@ class TwilioController {
                     });
                     
                     console.log('✅ [CONTACT UPDATE] Updated contact status to:', contactStatus);
-                } else {
-                    console.log('⚠️ [CONTACT LOOKUP] No contact found for phone:', To);
                 }
             } catch (contactErr) {
                 console.error('❌ [CONTACT LOOKUP] Error finding/updating contact:', contactErr);
-            }
-            
-            // STEP 2: Find campaign context
-            try {
-                let campaignId = null;
-                
-                // Try to get campaignId from various sources
-                if (contactFound && contactFound.campaignId) {
-                    campaignId = contactFound.campaignId;
-                    console.log('✅ [CAMPAIGN LOOKUP] Using campaignId from contact:', campaignId);
-                } else if (req.body.campaignId) {
-                    campaignId = req.body.campaignId;
-                    console.log('✅ [CAMPAIGN LOOKUP] Using campaignId from request body:', campaignId);
-                } else if (req.query.campaignId) {
-                    campaignId = req.query.campaignId;
-                    console.log('✅ [CAMPAIGN LOOKUP] Using campaignId from query params:', campaignId);
-                }
-                
-                if (campaignId) {
-                    const campaign = await Campaign.findById(campaignId);
-                    if (campaign) {
-                        campaignFound = campaign;
-                        console.log('✅ [CAMPAIGN LOOKUP] Found campaign:', campaign.objective);
-                    } else {
-                        console.log('⚠️ [CAMPAIGN LOOKUP] Campaign not found for ID:', campaignId);
-                    }
-                } else {
-                    console.log('⚠️ [CAMPAIGN LOOKUP] No campaignId found in any source');
-                }
-            } catch (campaignErr) {
-                console.error('❌ [CAMPAIGN LOOKUP] Error finding campaign:', campaignErr);
             }
             
             // STEP 3: Update or create call log with proper linking

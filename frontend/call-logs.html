@@ -7,26 +7,210 @@
     <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0idXJsKCNncmFkaWVudDApIi8+CjxwYXRoIGQ9Ik0xMCA5QzEwIDcuODk1NDMgMTAuODk1NCA3IDEyIDdIMjBDMjEuMTA0NiA3IDIyIDcuODk1NDMgMjIgOVYxMkMyMiAxMy4xMDQ2IDIxLjEwNDYgMTQgMjAgMTRIMTJDMTAuODk1NCAxNCAxMCAxMy4xMDQ2IDEwIDEyVjlaIiBmaWxsPSJ3aGl0ZSIvPgo8ZGVmcz4KPGxpbmVhckdyYWRpZW50IGlkPSJncmFkaWVudDAiIHgxPSIwIiB5MT0iMCIgeDI9IjMyIiB5Mj0iMzIiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iIzY2N0VFQSIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiM3NjRCQTIiLz4KPC9saW5lYXJHcmFkaWVudD4KPC9kZWZzPgo8L3N2Zz4K">
     <link rel="stylesheet" href="styles/main.css">
     <link rel="stylesheet" href="styles/dashboard.css">
+    <link rel="stylesheet" href="styles/responsive.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .activity-header {
+        /* Call Logs - Dashboard Consistent, Mobile-First */
+        .activity-content {
+            margin-top: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.1rem;
+        }
+        .call-log-card {
+            min-height: 150px;
+            padding: 1.5rem 0.7rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            width: 100%;
+            overflow: hidden;
+            max-width: 100%;
+            box-sizing: border-box;
+            box-shadow: 0 2px 12px 0 rgba(102,126,234,0.10);
+            border-radius: 16px;
+            margin-bottom: 0.7rem;
+            background: #fff;
+        }
+        .call-log-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
+            width: 100%;
         }
-        .activity-header h2 {
-            margin: 0;
+        .call-log-status {
+            margin-left: 1em;
+            white-space: nowrap;
         }
-        .campaign-selector {
-            padding: 8px 12px;
-            border-radius: 6px;
-            border: 1px solid #d1d5db;
-            font-size: 1rem;
-            background: #f8f9fa;
+        .call-log-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+            margin-top: 0.3em;
+            flex-wrap: wrap;
         }
-        .activity-card {
-            margin-top: 2rem;
+        .call-log-campaign {
+            background: #f3f4f6;
+            color: #667eea;
+            font-size: 0.93rem;
+            font-weight: 500;
+            border-radius: 999px;
+            padding: 0.18em 0.9em;
+            margin-right: 0.2em;
+        }
+        .call-log-date, .call-log-duration {
+            font-size: 0.91rem;
+            color: #888;
+            font-weight: 400;
+        }
+        .call-log-transcript {
+            font-size: 0.91rem;
+            color: #b0b4c0;
+            margin-top: 0.5em;
+            font-style: italic;
+            font-weight: 400;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            white-space: pre-line;
+            max-width: 100%;
+            display: block;
+        }
+        .call-log-phone {
+            font-size: 1.08rem;
+            font-weight: 700;
+            color: #222;
+            letter-spacing: 0.01em;
+            word-break: break-all;
+        }
+        .call-log-name {
+            font-size: 0.98rem;
+            color: #667eea;
+            font-weight: 500;
+            margin-top: 0.05rem;
+            word-break: break-all;
+        }
+        .call-log-status.busy, .call-log-status.failed {
+            color: #e74c3c;
+        }
+        .call-log-status.answered {
+            color: #3b82f6;
+        }
+        .call-log-status.no-answer {
+            color: #888;
+        }
+        @media (max-width: 600px) {
+            .activity-content {
+                gap: 0.8rem;
+            }
+            .call-log-card {
+                box-shadow: 0 2px 12px 0 rgba(102,126,234,0.10);
+                border-radius: 16px;
+                padding: 0.9rem 0.7rem 0.9rem 0.7rem;
+                margin-bottom: 0.2rem;
+                min-height: 180px;
+                padding-top: 1.2rem;
+                padding-bottom: 1.2rem;
+                display: flex;
+                flex-direction: row;
+                align-items: flex-start;
+                gap: 0.8rem;
+                width: 100%;
+                overflow: hidden;
+                max-width: 100%;
+                box-sizing: border-box;
+            }
+            .call-log-icon {
+                flex: none;
+                display: flex;
+                align-items: flex-start;
+                justify-content: center;
+                font-size: 1.5rem;
+                color: #667eea;
+                margin-top: 0.1rem;
+                margin-right: 0.5rem;
+            }
+            .call-log-main {
+                flex: 1 1 0;
+                display: flex;
+                flex-direction: column;
+                min-width: 0;
+            }
+            .call-log-row {
+                display: flex !important;
+                align-items: center;
+                justify-content: space-between;
+                width: 100%;
+            }
+            .call-log-phone {
+                font-size: 1.08rem;
+                font-weight: 700;
+                color: #222;
+                letter-spacing: 0.01em;
+                word-break: break-all;
+            }
+            .call-log-status {
+                margin-left: 1em;
+                white-space: nowrap;
+            }
+            .call-log-meta {
+                display: flex !important;
+                align-items: center;
+                gap: 0.5em;
+                margin-top: 0.3em;
+                flex-wrap: wrap;
+            }
+            .call-log-campaign {
+                background: #f3f4f6;
+                color: #667eea;
+                font-size: 0.93rem;
+                font-weight: 500;
+                border-radius: 5px;
+                padding: 0.18em 0.9em;
+                margin-right: 0.2em;
+                height: 50px;
+            }
+            .call-log-date, .call-log-duration {
+                font-size: 0.91rem;
+                color: #888;
+                font-weight: 400;
+            }
+            .call-log-transcript {
+                font-size: 0.91rem;
+                color: #b0b4c0;
+                margin-top: 0.5em;
+                font-style: italic;
+                font-weight: 400;
+                word-break: break-word;
+                overflow-wrap: anywhere;
+                white-space: pre-line;
+                max-width: 100%;
+                display: block;
+            }
+        }
+        /* DESKTOP/TABLET OVERRIDES */
+        @media (min-width: 601px) {
+          .call-log-card {
+            min-height: 90px;
+            padding: 1rem 1.1rem;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 1.2rem;
+          }
+          .call-log-main {
+            flex: 1 1 0;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+          }
+          .call-log-row {
+            flex-direction: row;
+            gap: 1.2rem;
+          }
+          .call-log-meta {
+            flex-direction: row;
+            gap: 0.7em;
+          }
         }
     </style>
 </head>
@@ -94,7 +278,7 @@
             <section class="activity-section">
                 <div class="activity-card">
                     <div class="activity-header">
-                        <h2 class="activity-title">Call Logs</h2>
+                        <h2 style="color: #000;">Call Logs</h2>
                         <select id="campaignSelector" class="campaign-selector" style="display:none;"></select>
                     </div>
                     <div class="activity-content" id="activityContent">
