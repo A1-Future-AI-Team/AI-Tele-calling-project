@@ -171,6 +171,9 @@ class TwilioController {
             if (Duration) {
                 console.log(`📞 Call duration: ${Duration} seconds`);
             }
+            let dbAction = null;
+            let dbError = null;
+            let dbResult = null;
             // Always log status updates
             try {
                 const filter = { callSid: CallSid };
@@ -189,31 +192,43 @@ class TwilioController {
                     { $set: update, $setOnInsert: { createdAt: new Date() } },
                     { upsert: true, new: true }
                 );
+                dbResult = result;
                 if (result) {
                     if (result.createdAt && result.updatedAt && result.createdAt.getTime() === result.updatedAt.getTime()) {
-                        console.log('✅ Call log saved to DB:', result);
+                        dbAction = 'created';
+                        console.log('✅ [DB] New call log created:', result);
                     } else {
-                        console.log('✅ Call log updated:', result);
+                        dbAction = 'updated';
+                        console.log('✅ [DB] Existing call log updated:', result);
                     }
+                } else {
+                    dbAction = 'none';
+                    console.log('⚠️ [DB] No call log found or updated for:', CallSid);
                 }
             } catch (err) {
-                console.error('❌ Error while saving call log:', err);
+                dbError = err;
+                console.error('❌ [DB] Error while saving/updating call log:', err);
             }
             // Save a new log on completed if not present
             if (CallStatus === 'completed') {
                 try {
-                    await CallLog.create({
-                        callSid: CallSid,
-                        to: To,
-                        from: From,
-                        duration: Duration ? Number(Duration) : (CallDuration ? Number(CallDuration) : undefined),
-                        status: CallStatus,
-                        campaignId: req.body.campaignId || req.query.campaignId || null,
-                        timestamp: new Date()
-                    });
-                    console.log(`📊 Call log saved for ${CallSid}`);
+                    const existing = await CallLog.findOne({ callSid: CallSid, status: 'completed' });
+                    if (!existing) {
+                        const completedLog = await CallLog.create({
+                            callSid: CallSid,
+                            to: To,
+                            from: From,
+                            duration: Duration ? Number(Duration) : (CallDuration ? Number(CallDuration) : undefined),
+                            status: CallStatus,
+                            campaignId: req.body.campaignId || req.query.campaignId || null,
+                            timestamp: new Date()
+                        });
+                        console.log(`📊 [DB] Call log saved for completed call:`, completedLog);
+                    } else {
+                        console.log(`🟡 [DB] Duplicate completed call log exists for ${CallSid}, skipping create.`);
+                    }
                 } catch (err) {
-                    console.error('❌ Error while saving call log:', err);
+                    console.error('❌ [DB] Error while saving completed call log:', err);
                 }
             }
             // Fetch and print real-time status from Twilio
@@ -225,7 +240,6 @@ class TwilioController {
             } catch (err) {
                 console.error('❌ Failed to fetch call status:', err.message);
             }
-            
             // Handle different call statuses
             switch (CallStatus) {
                 case 'initiated':
@@ -242,10 +256,6 @@ class TwilioController {
                     break;
                 case 'completed':
                     console.log('📞 Call completed');
-                    
-                    // =================================================================
-                    // 🗑️ AUTOMATIC AUDIO FILE CLEANUP (ENABLED)
-                    // =================================================================
                     try {
                         console.log('🧹 Automatic cleanup: Deleting recent audio files...');
                         await this.cleanupRecentAudioFiles(CallSid);
@@ -266,12 +276,9 @@ class TwilioController {
                 default:
                     console.log(`📞 Unknown call status: ${CallStatus}`);
             }
-            
-            // TODO: Update database with call status
-            // You can save call logs to your database here
-            
+            // Summary log
+            console.log(`📋 [Summary] CallSid: ${CallSid}, Status: ${CallStatus}, DB Action: ${dbAction}, DB Error: ${dbError ? dbError.message : 'none'}`);
             res.status(200).send('OK');
-            
         } catch (error) {
             console.error('❌ Error in call status webhook:', error);
             res.status(500).send('Internal Server Error');

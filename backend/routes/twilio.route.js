@@ -18,6 +18,9 @@ router.post('/test-simple-audio', twilioController.testSimpleAudio);
 // POST /voice-response - Handle Twilio voice response with campaign integration (legacy)
 router.post('/voice-response', twilioController.voiceResponse);
 
+// POST /status - Alternate route for Twilio statusCallback webhook
+router.post('/status', twilioController.handleCallStatus);
+
 // Add real-time call status fetch endpoint
 router.get('/call-status/:callSid', twilioController.getCallStatusBySid);
 
