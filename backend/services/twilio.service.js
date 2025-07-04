@@ -151,6 +151,10 @@ class TwilioService {
                 throw new Error('TWILIO_PHONE_NUMBER not set in environment variables');
             }
 
+            if (!process.env.BASE_URL) {
+                throw new Error('BASE_URL not set in environment variables - required for webhooks');
+            }
+
             // Use custom message or default test message
             const ttsMessage = message || 'नमस्ते, यह Reverie और Twilio का टेस्ट कॉल है। आपका स्वागत है।';
             
@@ -170,7 +174,7 @@ class TwilioService {
                 to: to,
                 url: webhookUrl,
                 method: 'POST',
-                statusCallback: `${process.env.BASE_URL || 'http://localhost:3000'}/api/twilio/call-status`,
+                statusCallback: `${process.env.BASE_URL}/api/twilio/call-status?campaignId=${campaignId}`,
                 statusCallbackMethod: 'POST',
                 statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed']
             });
@@ -222,7 +226,27 @@ class TwilioService {
      * @returns {Promise} Call result
      */
     async makeCallLegacy(to, campaignId) {
+        let tempCallSid = uuidv4();
+        let callLogDoc = null;
         try {
+            // Save call log to database BEFORE placing the call
+            try {
+                callLogDoc = await CallLog.create({
+                    campaignId: campaignId,
+                    language: 'Hindi', // Default language for legacy calls
+                    status: 'initiated',
+                    startTime: new Date(),
+                    contactId: null, // You can update this if you have contact info
+                    aiResponseLog: [],
+                    callSid: tempCallSid, // Temporary, will update after real callSid is known
+                    to: to,
+                    from: this.twilioPhoneNumber
+                });
+                console.log('✅ Call log (pre-call) saved to database for legacy call');
+            } catch (logErr) {
+                console.error('❌ Failed to pre-save call log for legacy call:', logErr);
+            }
+
             console.log(`📞 Making legacy call to ${to} for campaign ${campaignId}`);
             
             if (!this.client) {
@@ -233,12 +257,30 @@ class TwilioService {
                 throw new Error('TWILIO_PHONE_NUMBER not set in environment variables');
             }
 
+            if (!process.env.BASE_URL) {
+                throw new Error('BASE_URL not set in environment variables - required for webhooks');
+            }
+
             // Create the voice call using Twilio API with legacy webhook
             const call = await this.client.calls.create({
                 from: this.twilioPhoneNumber,
                 to: to,
-                url: `${process.env.BASE_URL || 'http://localhost:3000'}/api/twilio/voice-response?campaignId=${campaignId}`
+                url: `${process.env.BASE_URL}/api/twilio/voice-response?campaignId=${campaignId}`,
+                statusCallback: `${process.env.BASE_URL}/api/twilio/call-status?campaignId=${campaignId}`,
+                statusCallbackMethod: 'POST',
+                statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed']
             });
+
+            // Update the call log with the real callSid
+            if (callLogDoc) {
+                try {
+                    callLogDoc.callSid = call.sid;
+                    callLogDoc.save();
+                    console.log('✅ Legacy call log updated with real callSid');
+                } catch (updateErr) {
+                    console.error('❌ Failed to update legacy call log with real callSid:', updateErr);
+                }
+            }
 
             // Log successful call initiation
             console.log(`📞 Legacy call initiated to ${to}: SID ${call.sid}`);
@@ -358,13 +400,40 @@ class TwilioService {
      */
     async getCallStatus(callSid) {
         try {
-            const twilioClient = require('twilio')(this.accountSid, this.authToken);
-            const call = await twilioClient.calls(callSid).fetch();
-            console.log('📡 Twilio call object:', call);
+            console.log('📡 [TWILIO STATUS] Fetching status for callSid:', callSid);
+            
+            // Use the existing client instead of creating a new one
+            if (!this.client) {
+                console.error('❌ [TWILIO STATUS] Twilio client not initialized');
+                return 'unknown';
+            }
+            
+            // Skip real-time fetching for test/fake call SIDs
+            if (callSid.startsWith('test_') || callSid.includes('test')) {
+                console.log('🔄 [TWILIO STATUS] Skipping real-time status fetch for test call SID:', callSid);
+                return 'test_call';
+            }
+            
+            console.log('🔄 [TWILIO STATUS] Making API call to Twilio for callSid:', callSid);
+            const call = await this.client.calls(callSid).fetch();
+            
+            console.log('✅ [TWILIO STATUS] Successfully fetched call status from Twilio');
+            console.log(`📊 [TWILIO STATUS] Call ${callSid} status: ${call.status}`);
+            console.log(`📊 [TWILIO STATUS] Call direction: ${call.direction}`);
+            console.log(`📊 [TWILIO STATUS] Call duration: ${call.duration || 'N/A'}`);
+            console.log(`📊 [TWILIO STATUS] Call from: ${call.from} to: ${call.to}`);
+            
             return call.status;
         } catch (err) {
-            console.error('❌ Failed to fetch call status:', err.message);
-            return 'unknown';
+            // Handle specific Twilio errors gracefully
+            if (err.message.includes('not found') || err.message.includes('404')) {
+                console.log('🔄 [TWILIO STATUS] Call SID not found in Twilio (may be test/fake SID):', callSid);
+                return 'not_found';
+            } else {
+                console.error('❌ [TWILIO STATUS] Failed to fetch call status:', err.message);
+                console.error('❌ [TWILIO STATUS] Error details:', err);
+                return 'unknown';
+            }
         }
     }
 }

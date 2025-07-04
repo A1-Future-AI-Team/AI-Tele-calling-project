@@ -3,7 +3,11 @@ import CallLog from '../models/calllog.model.js';
 const callLogController = {
   async getAllLogs(req, res) {
     try {
-      const logs = await CallLog.find().sort({ createdAt: -1 }).limit(100);
+      const logs = await CallLog.find()
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .populate('contactId')
+        .populate('campaignId');
       res.json(logs);
     } catch (error) {
       console.error('Error fetching call logs:', error);
@@ -12,7 +16,11 @@ const callLogController = {
   },
   async getRecentLogs(req, res) {
     try {
-      const logs = await CallLog.find().sort({ createdAt: -1 }).limit(50);
+      const logs = await CallLog.find()
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .populate('contactId')
+        .populate('campaignId');
       res.json(logs);
     } catch (error) {
       console.error('Error fetching recent call logs:', error);

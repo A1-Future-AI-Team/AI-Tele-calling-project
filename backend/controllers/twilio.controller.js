@@ -163,43 +163,154 @@ class TwilioController {
      */
     async handleCallStatus(req, res) {
         try {
+            // Enhanced debug logging
+            console.log('🔍 DEBUG: handleCallStatus called');
+            console.log('🔍 DEBUG: Request method:', req.method);
+            console.log('🔍 DEBUG: Request URL:', req.url);
+            console.log('🔍 DEBUG: Request headers:', req.headers);
             console.log('📞 Webhook HIT - handleCallStatus');
             console.log('🧾 req.body:', req.body);
+            
             const { CallSid, CallStatus, To, From, Duration, CallDuration } = req.body;
             console.log(`📞 Call ${CallSid} status: ${CallStatus}`);
             console.log(`📞 From: ${From}, To: ${To}`);
             if (Duration) {
                 console.log(`📞 Call duration: ${Duration} seconds`);
             }
+            
             let dbAction = null;
             let dbError = null;
             let dbResult = null;
-            // Always log status updates
+            let contactFound = null;
+            let campaignFound = null;
+            
+            // STEP 1: Find the contact by phone number and campaign context
+            try {
+                console.log('🔍 [CONTACT LOOKUP] Looking for contact with phone:', To);
+                
+                // First, try to find contact by phone number
+                const contact = await Contact.findOne({ phone: To });
+                
+                if (contact) {
+                    contactFound = contact;
+                    console.log('✅ [CONTACT LOOKUP] Found contact:', contact.name, 'Campaign:', contact.campaignId);
+                    
+                    // Update contact status based on call status
+                    let contactStatus = 'PENDING';
+                    switch (CallStatus) {
+                        case 'initiated':
+                        case 'ringing':
+                            contactStatus = 'CALLING';
+                            break;
+                        case 'in-progress':
+                        case 'answered':
+                            contactStatus = 'CALLING';
+                            break;
+                        case 'completed':
+                            contactStatus = 'CALLED';
+                            break;
+                        case 'failed':
+                        case 'busy':
+                        case 'no-answer':
+                            contactStatus = 'FAILED';
+                            break;
+                    }
+                    
+                    // Update contact with call details and status
+                    await Contact.findByIdAndUpdate(contact._id, {
+                        status: contactStatus,
+                        callSid: CallSid,
+                        callTime: new Date(),
+                        lastCallResult: CallStatus,
+                        errorMessage: (CallStatus === 'failed' || CallStatus === 'busy' || CallStatus === 'no-answer') ? `Call ${CallStatus}` : null
+                    });
+                    
+                    console.log('✅ [CONTACT UPDATE] Updated contact status to:', contactStatus);
+                } else {
+                    console.log('⚠️ [CONTACT LOOKUP] No contact found for phone:', To);
+                }
+            } catch (contactErr) {
+                console.error('❌ [CONTACT LOOKUP] Error finding/updating contact:', contactErr);
+            }
+            
+            // STEP 2: Find campaign context
+            try {
+                let campaignId = null;
+                
+                // Try to get campaignId from various sources
+                if (contactFound && contactFound.campaignId) {
+                    campaignId = contactFound.campaignId;
+                    console.log('✅ [CAMPAIGN LOOKUP] Using campaignId from contact:', campaignId);
+                } else if (req.body.campaignId) {
+                    campaignId = req.body.campaignId;
+                    console.log('✅ [CAMPAIGN LOOKUP] Using campaignId from request body:', campaignId);
+                } else if (req.query.campaignId) {
+                    campaignId = req.query.campaignId;
+                    console.log('✅ [CAMPAIGN LOOKUP] Using campaignId from query params:', campaignId);
+                }
+                
+                if (campaignId) {
+                    const campaign = await Campaign.findById(campaignId);
+                    if (campaign) {
+                        campaignFound = campaign;
+                        console.log('✅ [CAMPAIGN LOOKUP] Found campaign:', campaign.objective);
+                    } else {
+                        console.log('⚠️ [CAMPAIGN LOOKUP] Campaign not found for ID:', campaignId);
+                    }
+                } else {
+                    console.log('⚠️ [CAMPAIGN LOOKUP] No campaignId found in any source');
+                }
+            } catch (campaignErr) {
+                console.error('❌ [CAMPAIGN LOOKUP] Error finding campaign:', campaignErr);
+            }
+            
+            // STEP 3: Update or create call log with proper linking
             try {
                 const filter = { callSid: CallSid };
+                
+                // Build comprehensive update object
                 const update = {
                     callSid: CallSid,
                     from: From,
                     to: To,
                     status: CallStatus,
-                    duration: Duration ? Number(Duration) : (CallDuration ? Number(CallDuration) : undefined),
-                    campaignId: req.body.campaignId || req.query.campaignId || null,
+                    duration: Duration ? Number(Duration) : (CallDuration ? Number(CallDuration) : 0),
+                    contactId: contactFound ? contactFound._id : null,
+                    campaignId: campaignFound ? campaignFound._id : (contactFound ? contactFound.campaignId : null),
+                    language: campaignFound ? campaignFound.language : (contactFound ? 'Hindi' : 'Hindi'),
                     endTime: (CallStatus === 'completed' && (Duration || CallDuration)) ? new Date() : undefined,
+                    updatedAt: new Date()
                 };
+                
+                // Remove undefined values
                 Object.keys(update).forEach(key => update[key] === undefined && delete update[key]);
+                
+                console.log('📊 [CALL LOG] Update object:', update);
+                
                 const result = await CallLog.findOneAndUpdate(
                     filter,
                     { $set: update, $setOnInsert: { createdAt: new Date() } },
                     { upsert: true, new: true }
                 );
+                
                 dbResult = result;
                 if (result) {
                     if (result.createdAt && result.updatedAt && result.createdAt.getTime() === result.updatedAt.getTime()) {
                         dbAction = 'created';
-                        console.log('✅ [DB] New call log created:', result);
+                        console.log('✅ [DB] New call log created with proper linking:', {
+                            callSid: result.callSid,
+                            contactId: result.contactId,
+                            campaignId: result.campaignId,
+                            status: result.status
+                        });
                     } else {
                         dbAction = 'updated';
-                        console.log('✅ [DB] Existing call log updated:', result);
+                        console.log('✅ [DB] Existing call log updated with proper linking:', {
+                            callSid: result.callSid,
+                            contactId: result.contactId,
+                            campaignId: result.campaignId,
+                            status: result.status
+                        });
                     }
                 } else {
                     dbAction = 'none';
@@ -209,29 +320,8 @@ class TwilioController {
                 dbError = err;
                 console.error('❌ [DB] Error while saving/updating call log:', err);
             }
-            // Save a new log on completed if not present
-            if (CallStatus === 'completed') {
-                try {
-                    const existing = await CallLog.findOne({ callSid: CallSid, status: 'completed' });
-                    if (!existing) {
-                        const completedLog = await CallLog.create({
-                            callSid: CallSid,
-                            to: To,
-                            from: From,
-                            duration: Duration ? Number(Duration) : (CallDuration ? Number(CallDuration) : undefined),
-                            status: CallStatus,
-                            campaignId: req.body.campaignId || req.query.campaignId || null,
-                            timestamp: new Date()
-                        });
-                        console.log(`📊 [DB] Call log saved for completed call:`, completedLog);
-                    } else {
-                        console.log(`🟡 [DB] Duplicate completed call log exists for ${CallSid}, skipping create.`);
-                    }
-                } catch (err) {
-                    console.error('❌ [DB] Error while saving completed call log:', err);
-                }
-            }
-            // Fetch and print real-time status from Twilio
+            
+            // STEP 4: Fetch and print real-time status from Twilio
             console.log('➡️ About to fetch real status...');
             try {
                 const twilioService = (await import('../services/twilio.service.js')).default;
@@ -240,7 +330,8 @@ class TwilioController {
             } catch (err) {
                 console.error('❌ Failed to fetch call status:', err.message);
             }
-            // Handle different call statuses
+            
+            // STEP 5: Handle different call statuses
             switch (CallStatus) {
                 case 'initiated':
                     console.log('📞 Call initiated');
@@ -276,8 +367,11 @@ class TwilioController {
                 default:
                     console.log(`📞 Unknown call status: ${CallStatus}`);
             }
-            // Summary log
+            
+            // STEP 6: Summary log
             console.log(`📋 [Summary] CallSid: ${CallSid}, Status: ${CallStatus}, DB Action: ${dbAction}, DB Error: ${dbError ? dbError.message : 'none'}`);
+            console.log(`📋 [Summary] Contact: ${contactFound ? contactFound.name : 'Not found'}, Campaign: ${campaignFound ? campaignFound.objective : 'Not found'}`);
+            
             res.status(200).send('OK');
         } catch (error) {
             console.error('❌ Error in call status webhook:', error);

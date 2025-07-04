@@ -33,7 +33,12 @@ class App {
   }
 
   initializeMiddlewares() {
-
+    // Add trust proxy for cloudflare tunnel
+    this.app.set('trust proxy', true);
+    
+    // Log BASE_URL at startup
+    console.log('🌐 Using BASE_URL:', process.env.BASE_URL || 'NOT SET');
+    
     this.app.use(helmet());
     this.app.use(cors({
             origin: '*',
@@ -42,8 +47,10 @@ class App {
       allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
     }));
     this.app.use(morgan('combined'));
+    
+    // Fix: Use extended: false for Twilio form-encoded data
+    this.app.use(express.urlencoded({ extended: false }));
     this.app.use(express.json({ limit: '10mb' }));
-    this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
     
         // Serve frontend static files
         this.app.use(express.static(path.join(__dirname, '..', 'frontend')));

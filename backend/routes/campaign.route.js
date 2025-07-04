@@ -52,6 +52,10 @@ router.get('/list', CampaignController.getCampaigns);
 router.get('/:id/stats', CampaignController.getCampaignStats);
 router.get('/:id', CampaignController.getCampaignById);
 
+// Real-time status monitoring routes
+router.get('/:id/live-status', CampaignController.getCampaignLiveStatus);
+router.get('/call-status/:callSid', CampaignController.getCallStatus);
+
 // Error handling middleware for multer errors
 router.use((error, req, res, next) => {
     if (error instanceof multer.MulterError) {
