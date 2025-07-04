@@ -317,8 +317,7 @@ async function makeRealCalls(campaignId, language, objective, sampleFlow) {
                     await new Promise(resolve => setTimeout(resolve, 2000));
                 }
             }
-            
-            console.log(`✅ Real calling completed for campaign: ${campaignId}`);
+        
             
         } catch (error) {
             console.error('❌ Error in makeRealCalls:', error);

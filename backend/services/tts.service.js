@@ -12,6 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 class TTSService {
+
     constructor() {
         this.audioDirectory = path.join(__dirname, '../public/audio');
         this.reverieApiUrl = 'https://revapi.reverieinc.com/';
@@ -30,16 +31,6 @@ class TTSService {
             'hi': 'hi',   // Hindi
             'en': 'en',   // English
             'bn': 'bn',   // Bengali
-            'ta': 'ta',   // Tamil
-            'te': 'te',   // Telugu
-            'ml': 'ml',   // Malayalam
-            'kn': 'kn',   // Kannada
-            'gu': 'gu',   // Gujarati
-            'pa': 'pa',   // Punjabi
-            'or': 'or',   // Odia
-            'as': 'as',   // Assamese
-            'mr': 'mr',   // Marathi
-            'ur': 'ur'    // Urdu
         };
     }
 
@@ -182,7 +173,6 @@ class TTSService {
     }
 }
 
-// Export singleton instance
+
 const ttsService = new TTSService();
 export default ttsService;
- 

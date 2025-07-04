@@ -4,6 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import ttsService from './tts.service.js';
+import CallLog from '../models/calllog.model.js';
+import { v4 as uuidv4 } from 'uuid';
 
 // Load environment variables
 dotenv.config();
@@ -13,6 +15,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 class TwilioService {
+
     constructor() {
         // Initialize Twilio client with environment variables
         this.accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -58,14 +61,6 @@ class TwilioService {
             'Bengali': {
                 'male': 'bn_male',
                 'female': 'bn_female'
-            },
-            'Tamil': {
-                'male': 'ta_male',
-                'female': 'ta_female'
-            },
-            'Telugu': {
-                'male': 'te_male',
-                'female': 'te_female'
             }
         };
         
@@ -125,7 +120,27 @@ class TwilioService {
      * @returns {Promise} Call result
      */
     async makeCall(to, campaignId, message = null, language = 'Hindi') {
+        let tempCallSid = uuidv4();
+        let callLogDoc = null;
         try {
+            // Save call log to database BEFORE placing the call
+            try {
+                callLogDoc = await CallLog.create({
+                    campaignId: campaignId,
+                    language: language,
+                    status: 'initiated',
+                    startTime: new Date(),
+                    contactId: null, // You can update this if you have contact info
+                    aiResponseLog: [],
+                    callSid: tempCallSid, // Temporary, will update after real callSid is known
+                    to: to,
+                    from: this.twilioPhoneNumber
+                });
+                console.log('✅ Call log (pre-call) saved to database');
+            } catch (logErr) {
+                console.error('❌ Failed to pre-save call log:', logErr);
+            }
+
             console.log(`📞 Making call to ${to} for campaign ${campaignId}`);
             
             if (!this.client) {
@@ -159,6 +174,17 @@ class TwilioService {
                 statusCallbackMethod: 'POST',
                 statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed']
             });
+
+            // Update the call log with the real callSid
+            if (callLogDoc) {
+                try {
+                    callLogDoc.callSid = call.sid;
+                    callLogDoc.save();
+                    console.log('✅ Call log updated with real callSid');
+                } catch (updateErr) {
+                    console.error('❌ Failed to update call log with real callSid:', updateErr);
+                }
+            }
 
             // Log successful call initiation
             console.log(`📞 Call initiated to ${to}: SID ${call.sid}`);
@@ -324,7 +350,24 @@ class TwilioService {
             console.error('❌ Error cleaning up audio files:', error.message);
         }
     }
+
+    /**
+     * Get real-time status of a call from Twilio
+     * @param {string} callSid - The Twilio Call SID
+     * @returns {Promise<string>} - The current status of the call
+     */
+    async getCallStatus(callSid) {
+        try {
+            const twilioClient = require('twilio')(this.accountSid, this.authToken);
+            const call = await twilioClient.calls(callSid).fetch();
+            console.log('📡 Twilio call object:', call);
+            return call.status;
+        } catch (err) {
+            console.error('❌ Failed to fetch call status:', err.message);
+            return 'unknown';
+        }
+    }
 }
 
-// Export singleton instance
+
 export default new TwilioService(); 

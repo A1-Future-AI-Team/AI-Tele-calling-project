@@ -340,47 +340,33 @@ class DashboardManager {
     }
 
     async fetchRecentActivity() {
-        // TODO: Replace with actual API call
-        // return await window.api.get('/api/dashboard/activity');
-        
-        // Mock data for now
-        return [
-            {
-                phone: '+1 234-567-8901',
-                status: 'success',
-                date: '2024-01-15 14:30',
-                campaign: 'Customer Feedback',
-                transcriptId: 'transcript-001'
-            },
-            {
-                phone: '+1 234-567-8902',
-                status: 'failed',
-                date: '2024-01-15 14:25',
-                campaign: 'Product Survey',
-                transcriptId: null
-            },
-            {
-                phone: '+1 234-567-8903',
-                status: 'success',
-                date: '2024-01-15 14:20',
-                campaign: 'Service Follow-up',
-                transcriptId: 'transcript-002'
-            },
-            {
-                phone: '+1 234-567-8904',
-                status: 'pending',
-                date: '2024-01-15 14:15',
-                campaign: 'Order Confirmation',
-                transcriptId: null
-            },
-            {
-                phone: '+1 234-567-8905',
-                status: 'success',
-                date: '2024-01-15 14:10',
-                campaign: 'Appointment Reminder',
-                transcriptId: 'transcript-003'
+        // Fetch real call logs from backend
+        let logs = [];
+        try {
+            const response = await window.api.get('/api/calllog'); // Adjust endpoint if needed
+            logs = response.data || [];
+        } catch (err) {
+            console.error('Failed to fetch call logs:', err);
+            this.showNotification('Failed to fetch call logs', 'error');
+            return [];
+        }
+
+        // For each log, fetch real-time status from Twilio
+        const logsWithStatus = await Promise.all(logs.map(async (log) => {
+            let realStatus = log.status;
+            if (log.callSid) {
+                try {
+                    const statusResp = await window.api.getCallStatus(log.callSid);
+                    if (statusResp && statusResp.status) {
+                        realStatus = statusResp.status;
+                    }
+                } catch (e) {
+                    console.warn('Could not fetch real-time status for', log.callSid, e);
+                }
             }
-        ];
+            return { ...log, status: realStatus };
+        }));
+        return logsWithStatus;
     }
 
     loadMockData() {

@@ -336,6 +336,15 @@ class APIHandler {
     setDefaultHeaders(headers) {
         this.defaultHeaders = { ...this.defaultHeaders, ...headers };
     }
+
+    /**
+     * Get real-time call status by callSid
+     */
+    async getCallStatus(callSid) {
+        if (!callSid) throw new Error('Missing callSid');
+        const response = await this.get(`/api/twilio/call-status/${callSid}`);
+        return response.data;
+    }
 }
 
 // Create and export singleton instance

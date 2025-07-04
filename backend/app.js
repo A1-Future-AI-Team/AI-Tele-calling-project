@@ -12,6 +12,7 @@ import authRoutes from './routes/auth.route.js';
 import campaignRoutes from './routes/campaign.route.js';
 import twilioRoutes from './routes/twilio.route.js';
 import ttsRoutes from './routes/tts.route.js';
+import callLogRoutes from './routes/calllog.route.js';
 
 dotenv.config();
 
@@ -73,6 +74,7 @@ class App {
         this.app.use('/api/campaign', campaignRoutes);
         this.app.use('/api/twilio', twilioRoutes);
         this.app.use('/api/tts', ttsRoutes);
+        this.app.use('/api', callLogRoutes);
         
         // Health check route
     this.app.get('/health', (req, res) => {

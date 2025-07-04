@@ -31,7 +31,17 @@ const callLogSchema = new mongoose.Schema({
     },
     aiResponseLog: [{
         type: mongoose.Schema.Types.Mixed
-    }]
+    }],
+    callSid: {
+        type: String,
+        index: true
+    },
+    to: {
+        type: String
+    },
+    from: {
+        type: String
+    }
 }, {
     timestamps: true
 });
