@@ -75,9 +75,14 @@ function createActivityItem(activity) {
     let campaignName = campaign.objective || 'Unknown';
     if (campaignName.length > 48) campaignName = campaignName.slice(0, 48) + '...';
     const date = activity.createdAt ? new Date(activity.createdAt).toLocaleString() : 'Unknown';
-    const transcriptId = contact.transcriptId;
-    const transcriptLink = transcriptId
-        ? `<a href="/transcripts/${transcriptId}" class="transcript-link" style="color:#4f46e5;font-weight:500;text-decoration:none;margin-left:1.1em;"><i class="fas fa-file-text"></i> View Transcript</a>`
+    
+    // Use the new transcript information from the API
+    const hasTranscript = activity.hasTranscript;
+    const transcriptId = activity.transcriptId;
+    const transcriptEntryCount = activity.transcriptEntryCount || 0;
+    
+    const transcriptLink = hasTranscript && transcriptId
+        ? `<a href="/transcript-viewer.html?id=${transcriptId}" class="transcript-link" style="color:#4f46e5;font-weight:500;text-decoration:none;margin-left:1.1em;" target="_blank"><i class="fas fa-file-text"></i> View Transcript (${transcriptEntryCount} messages)</a>`
         : '<span class="transcript-link no-transcript" style="color:#a0aec0;margin-left:1.1em;">No transcript</span>';
 
     item.innerHTML = `
@@ -134,9 +139,14 @@ function createMobileCallLogItem(activity) {
     if (campaignName.length > 48) campaignName = campaignName.slice(0, 48) + '...';
     const date = activity.createdAt ? new Date(activity.createdAt).toLocaleString() : 'Unknown';
     const duration = activity.duration ? (activity.duration >= 60 ? `${Math.floor(activity.duration/60)}:${('0'+(activity.duration%60)).slice(-2)}` : `0:${('0'+activity.duration).slice(-2)}`) : '';
-    const transcriptId = contact.transcriptId;
-    const transcript = transcriptId
-        ? `<a href="/transcripts/${transcriptId}" class="transcript-link" style="color:#4f46e5;font-weight:500;text-decoration:none;"><i class="fas fa-file-text"></i> View Transcript</a>`
+    
+    // Use the new transcript information from the API
+    const hasTranscript = activity.hasTranscript;
+    const transcriptId = activity.transcriptId;
+    const transcriptEntryCount = activity.transcriptEntryCount || 0;
+    
+    const transcript = hasTranscript && transcriptId
+        ? `<a href="/transcript-viewer.html?id=${transcriptId}" class="transcript-link" style="color:#4f46e5;font-weight:500;text-decoration:none;" target="_blank"><i class="fas fa-file-text"></i> View Transcript (${transcriptEntryCount} messages)</a>`
         : '<span class="call-log-transcript">No transcript</span>';
 
     item.innerHTML = `

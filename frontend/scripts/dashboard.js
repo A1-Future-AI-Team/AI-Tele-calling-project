@@ -461,11 +461,15 @@ class DashboardManager {
         let campaignName = campaign.objective || 'Unknown';
         if (campaignName.length > 32) campaignName = campaignName.slice(0, 32) + '...';
         const date = activity.createdAt ? new Date(activity.createdAt).toLocaleString() : 'Unknown';
-        const transcriptId = contact.transcriptId;
+        
+        // Use the new transcript information from the API
+        const hasTranscript = activity.hasTranscript;
+        const transcriptId = activity.transcriptId;
+        const transcriptEntryCount = activity.transcriptEntryCount || 0;
 
-        const transcriptLink = transcriptId
-            ? `<a href="/transcripts/${transcriptId}" class="transcript-link">
-                 <i class="fas fa-file-text"></i> View Transcript
+        const transcriptLink = hasTranscript && transcriptId
+            ? `<a href="/transcript-viewer.html?id=${transcriptId}" class="transcript-link" target="_blank">
+                 <i class="fas fa-file-text"></i> View Transcript (${transcriptEntryCount} messages)
                </a>`
             : '<span class="transcript-link no-transcript">No transcript</span>';
 

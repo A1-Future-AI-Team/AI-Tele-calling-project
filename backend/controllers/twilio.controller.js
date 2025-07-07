@@ -11,7 +11,96 @@ import {
 import CallLog from '../models/calllog.model.js';
 
 class TwilioController {
-    
+    constructor() {
+        // User behavior tracking for dynamic timeout adjustment
+        this.userBehavior = new Map(); // callSid -> behavior object
+    }
+
+    // Track user behavior and calculate optimal timeout
+    trackUserBehavior(callSid, recordingDuration, wordCount, wasCutOff = false) {
+        if (!this.userBehavior.has(callSid)) {
+            this.userBehavior.set(callSid, {
+                shortResponses: 0,    // User gets cut off frequently
+                longResponses: 0,     // User talks for full duration
+                optimalResponses: 0,  // User completes thoughts naturally
+                totalCalls: 0
+            });
+        }
+
+        const behavior = this.userBehavior.get(callSid);
+        behavior.totalCalls++;
+
+        // Categorize user response pattern
+        if (wasCutOff || (wordCount < 3 && recordingDuration < 2)) {
+            behavior.shortResponses++;
+            console.log(`📊 User behavior: Short response detected (${wordCount} words, ${recordingDuration}s)`);
+        } else if (recordingDuration >= 9) { // Close to maxLength
+            behavior.longResponses++;
+            console.log(`📊 User behavior: Long response detected (${wordCount} words, ${recordingDuration}s)`);
+        } else {
+            behavior.optimalResponses++;
+            console.log(`📊 User behavior: Optimal response (${wordCount} words, ${recordingDuration}s)`);
+        }
+
+        console.log(`📊 Behavior stats for ${callSid}:`, behavior);
+    }
+
+    // Calculate optimal timeout based on user behavior
+    getOptimalTimeout(callSid, language = 'English') {
+        const behavior = this.userBehavior.get(callSid);
+        
+        if (!behavior || behavior.totalCalls < 2) {
+            return 2; // Default timeout for new users
+        }
+
+        let timeout;
+        if (behavior.shortResponses > 2) {
+            timeout = 4; // User needs more time to complete thoughts
+            console.log(`⏱️ Increasing timeout to ${timeout}s - user frequently gets cut off`);
+        } else if (behavior.longResponses > 2) {
+            timeout = 1.5; // User talks too much, need shorter timeout
+            console.log(`⏱️ Decreasing timeout to ${timeout}s - user tends to talk too long`);
+        } else {
+            timeout = 2; // Optimal timeout
+            console.log(`⏱️ Using optimal timeout of ${timeout}s`);
+        }
+
+        return timeout;
+    }
+
+    // Get user feedback message based on behavior
+    getUserFeedbackMessage(recordingDuration, wordCount, language = 'English') {
+        const wasTooShort = wordCount < 3 && recordingDuration < 2;
+        const wasTooLong = recordingDuration >= 9;
+
+        if (wasTooShort) {
+            switch (language) {
+                case 'Hindi':
+                    return 'कृपया जारी रखें, मैं सुन रहा हूँ...';
+                case 'Bengali':
+                    return 'দয়া করে চালিয়ে যান, আমি শুনছি...';
+                default:
+                    return 'Please continue, I\'m listening...';
+            }
+        } else if (wasTooLong) {
+            switch (language) {
+                case 'Hindi':
+                    return 'आपकी विस्तृत जानकारी के लिए धन्यवाद। मैं आपकी मदद करूंगा।';
+                case 'Bengali':
+                    return 'আপনার বিস্তারিত উত্তর দেওয়ার জন্য ধন্যবাদ। আমি আপনাকে সাহায্য করব।';
+                default:
+                    return 'Thank you for that detailed response. Let me help you with that.';
+            }
+        }
+        return null; // No feedback needed
+    }
+
+    // Reset user behavior after successful conversation
+    resetUserBehavior(callSid) {
+        this.userBehavior.delete(callSid);
+        console.log(`🔄 Reset behavior tracking for call: ${callSid}`);
+    }
+
     /**
      * Handle TTS audio playback webhook
      */
@@ -83,7 +172,7 @@ class TwilioController {
                     // Add recording capability for dynamic AI conversation
                     console.log('🎤 Adding recording capability for user response...');
                     twiml.record({
-                        action: '/api/twilio/transcribe',
+                        action: `/api/twilio/transcribe?campaignId=${campaignId}`,
                         method: 'POST',
                         maxLength: 10,
                         timeout: 2,
@@ -525,17 +614,75 @@ class TwilioController {
             const memoryKey = { callSid: CallSid || 'init', campaignId };
             console.log(`🧠 Using memory key: ${(CallSid || 'init')}::${campaignId}`);
             try {
-                const aiParams = {
-                    objective: objective,
-                    language: language,
-                    sampleFlow: sampleFlow || '',
-                    conversationHistory: [],
-                    userInput: 'Start the conversation naturally in ' + language + '. Greet the customer and introduce yourself as a human agent.'
-                };
-                const aiReply = await generateReply(aiParams);
-                console.log(`🎯 AI Generated Opening: "${aiReply}"`);
-                // Optionally, save the initial AI message to memory for this call/campaign
-                // saveMessage({ ...memoryKey, role: 'assistant', content: aiReply });
+                // --- FIX: Generate a real AI greeting using LLM ---
+                const systemPrompt = `
+You are a professional telecaller. Your job is: ${objective}
+Greet the customer, introduce yourself, and start a natural sales conversation about the Tata Safari.
+Be concise, polite, and context-aware. Do NOT just repeat the objective—act like a real agent.
+`;
+                const { generateReply } = await import('../services/llm.service.js');
+                const aiReply = await generateReply({
+                  objective,
+                  language,
+                  sampleFlow,
+                  conversationHistory: [], // No history for the first message
+                  userInput: 'Start the call', // Use a generic, non-empty input
+                  systemPrompt
+                });
+                // --- END FIX ---
+                
+                // Save the initial AI message to memory for this call/campaign
+                saveMessage({ ...memoryKey, role: 'assistant', content: aiReply });
+                
+                // Save initial AI greeting to transcript
+                console.log('💾 Saving initial AI greeting to transcript...');
+                const Transcript = (await import('../models/transcript.model.js')).default;
+                const Contact = (await import('../models/contact.model.js')).default;
+                
+                // Find the contact for this call
+                let contact = null;
+                if (CallSid) {
+                    // Try to find contact by phone number from the call
+                    const callLog = await CallLog.findOne({ callSid: CallSid });
+                    if (callLog && callLog.to) {
+                        contact = await Contact.findOne({ phone: callLog.to });
+                    }
+                }
+                
+                // Find or create transcript for this specific contact and campaign
+                let transcript = null;
+                if (contact) {
+                    transcript = await Transcript.findOne({ 
+                        contactId: contact._id, 
+                        campaignId: campaignId 
+                    });
+                }
+                
+                if (!transcript) {
+                    transcript = new Transcript({ 
+                        contactId: contact?._id,
+                        campaignId: campaignId, 
+                        entries: [] 
+                    });
+                }
+                
+                // Add initial AI greeting to transcript
+                transcript.entries.push({
+                    from: 'ai',
+                    text: aiReply,
+                    timestamp: new Date()
+                });
+                
+                await transcript.save();
+                console.log('✅ Initial AI greeting saved to transcript');
+                
+                // Update contact with transcript ID if we have a contact
+                if (contact && transcript._id) {
+                    await Contact.findByIdAndUpdate(contact._id, {
+                        transcriptId: transcript._id.toString()
+                    });
+                    console.log('✅ Contact updated with transcript ID:', transcript._id);
+                }
                 const speakerMapping = this.mapLanguageToSpeaker(language, 'female');
                 console.log(`🗣️ Selected Speaker ID: ${speakerMapping}`);
                 const [langCode, genderCode] = speakerMapping.split('_');
@@ -689,9 +836,17 @@ class TwilioController {
                 const formData = new FormData();
                 
                 // Add audio buffer to form data using official format
+                // Determine correct content type from Twilio response
+                const contentType = audioResponse.headers['content-type'] || 'audio/wav';
+                const isMp3 = contentType.includes('mp3');
+                const filename = isMp3 ? 'recording.mp3' : 'recording.wav';
+                const fileContentType = isMp3 ? 'audio/mpeg' : 'audio/wav';
+                
+                console.log(`🎵 Audio format detected: ${contentType}, using filename: ${filename}`);
+                
                 formData.append('audio_file', Buffer.from(audioBuffer), {
-                    filename: 'recording.wav',
-                    contentType: 'audio/wav'
+                    filename: filename,
+                    contentType: fileContentType
                 });
                 
                 // Make request to Reverie STT API using official format
@@ -704,35 +859,106 @@ class TwilioController {
                 const sttLang = sttLanguageMap[currentLanguage] || 'en';
                 console.log(`🗣️ Using STT language: ${sttLang} for campaign language: ${currentLanguage}`);
                 
-                const sttResponse = await axios.post('https://revapi.reverieinc.com/', formData, {
-                    headers: {
-                        'src_lang': sttLang,
-                        'domain': 'generic',
-                        'REV-API-KEY': process.env.REVERIE_API_KEY,
-                        'REV-APPNAME': 'stt_file',
-                        'REV-APP-ID': process.env.REVERIE_APP_ID,
-                        ...formData.getHeaders()
-                    },
-                    timeout: 30000 // 30 seconds timeout
+                // Prepare headers for Reverie STT API
+                const sttHeaders = {
+                    'REV-API-KEY': process.env.REVERIE_API_KEY,
+                    'REV-APP-ID': process.env.REVERIE_APP_ID,
+                    'REV-APPNAME': 'stt_file',
+                    'src_lang': sttLang,
+                    'domain': 'generic',
+                    ...formData.getHeaders()
+                };
+                
+                console.log('🔧 STT Headers:', {
+                    'REV-API-KEY': process.env.REVERIE_API_KEY ? 'SET' : 'MISSING',
+                    'REV-APP-ID': process.env.REVERIE_APP_ID ? 'SET' : 'MISSING',
+                    'REV-APPNAME': 'stt_file',
+                    'src_lang': sttLang,
+                    'domain': 'generic'
                 });
                 
+                let sttResponse;
+                try {
+                    // Log the actual headers being sent
+                    console.log('🔧 ACTUAL STT Headers being sent:', sttHeaders);
+                    
+                    sttResponse = await axios.post('https://revapi.reverieinc.com/', formData, {
+                        headers: sttHeaders,
+                        timeout: 30000 // 30 seconds timeout
+                    });
+                } catch (sttError) {
+                    console.error('❌ STT API Request Failed:', sttError.message);
+                    console.error('❌ STT Error Details:', sttError.response?.data || 'No response data');
+                    console.error('❌ STT Error Status:', sttError.response?.status || 'No status');
+                    
+                    // Fallback to Twilio's built-in transcription if STT fails
+                    console.log('🔄 Falling back to Twilio transcription...');
+                    twiml.say({ voice: 'alice', language: this.mapLanguageToTwimlLanguage(currentLanguage) }, 
+                        currentLanguage === 'Hindi' ? 'माफ़ करें, तकनीकी समस्या है। कृपया फिर से बोलें।' :
+                        currentLanguage === 'Bengali' ? 'দুঃখিত, প্রযুক্তিগত সমস্যা। দয়া করে আবার বলুন।' :
+                        'Sorry, technical issue. Please speak again.'
+                    );
+                    twiml.record({
+                        action: `/api/twilio/transcribe?campaignId=${campaignId}`,
+                        method: 'POST',
+                        maxLength: 20,
+                        timeout: 4,
+                        playBeep: false,
+                        trim: 'do-not-trim'
+                    });
+                    res.type('text/xml');
+                    return res.send(twiml.toString());
+                }
+                
                 console.log(`📊 Reverie STT response status: ${sttResponse.status}`);
-                // console.log(`📊 Reverie STT response headers:`, sttResponse.headers);
+                console.log(`📊 Reverie STT response headers:`, sttResponse.headers);
                 
                 const sttResult = sttResponse.data;
                 console.log('🎯 Reverie STT response:', sttResult);
                 
+                // Check for STT API errors
+                if (sttResult.error || sttResult.status === 'error') {
+                    console.error('❌ STT API Error:', sttResult.error || sttResult.message || 'Unknown STT error');
+                    throw new Error(`STT API Error: ${sttResult.error || sttResult.message || 'Unknown error'}`);
+                }
+                
                 // Extract transcribed text
                 let transcribedText = sttResult.text || sttResult.transcript || sttResult.result || 'No transcription available';
                 console.log(`📝 Transcribed text: "${transcribedText}"`);
+                console.log(`📊 STT Confidence: ${sttResult.confidence}`);
+                console.log(`📊 Word count: ${transcribedText.trim().split(/\s+/).filter(Boolean).length}`);
+                
+                // If Reverie STT fails, try to use Twilio's transcription as fallback
+                if (!transcribedText || transcribedText.trim().toLowerCase() === 'no transcription available') {
+                    console.log('⚠️ Reverie STT returned no transcription, checking for Twilio transcription...');
+                    
+                    // Check if Twilio provided transcription in the webhook
+                    const twilioTranscription = req.body.SpeechResult || req.body.TranscriptionText;
+                    if (twilioTranscription) {
+                        transcribedText = twilioTranscription;
+                        console.log(`📝 Using Twilio transcription: "${transcribedText}"`);
+                    }
+                }
                 
                 // Initialize failCountKey at the top level for proper scoping
                 let failCountKey = `failCount_${callSid}::${campaignId}`;
                 if (!global._failCounts) global._failCounts = {};
-                // GUARD: skip saving if transcription is invalid, very short, or low confidence
+                
+                // Track user behavior for dynamic timeout adjustment
+                const recordingDuration = parseFloat(req.body.RecordingDuration) || 0;
                 let wordCount = transcribedText.trim().split(/\s+/).filter(Boolean).length;
                 const sttConfidence = typeof sttResult.confidence === 'number' ? sttResult.confidence : 1;
-                if (!transcribedText || transcribedText.trim().toLowerCase() === 'no transcription available' || wordCount === 0 || sttConfidence < 0.7) {
+                
+                // Track user behavior (even for failed transcriptions to learn patterns)
+                this.trackUserBehavior(callSid, recordingDuration, wordCount, false);
+                
+                // Lower confidence threshold and be more lenient with valid transcriptions
+                const hasValidTranscription = transcribedText &&
+                    transcribedText.trim().toLowerCase() !== 'no transcription available' &&
+                    wordCount > 0;
+                
+                // Only reject if we have no transcription at all (ignore confidence if text is present)
+                if (!hasValidTranscription) {
                     // Log failed audio for analysis
                     if (RecordingUrl) {
                         console.warn('⚠️ Logging failed audio RecordingUrl for analysis:', RecordingUrl);
@@ -752,12 +978,15 @@ class TwilioController {
                         twimlLang = 'en-US';
                     }
                     if (failCount < 3) {
+                        // Get dynamic timeout based on user behavior
+                        const dynamicTimeout = this.getOptimalTimeout(callSid, currentLanguage);
+                        
                         twiml.say({ voice: 'alice', language: twimlLang }, repeatMsg);
                         twiml.record({
                             action: `/api/twilio/transcribe?campaignId=${campaignId}`,
                             method: 'POST',
                             maxLength: 20,
-                            timeout: 4,
+                            timeout: dynamicTimeout,
                             playBeep: false,
                             trim: 'do-not-trim'
                         });
@@ -778,17 +1007,24 @@ class TwilioController {
                         twiml.say({ voice: 'alice', language: endLang }, endMsg);
                         res.type('text/xml');
                         delete global._failCounts[failCountKey];
+                        
+                        // Reset user behavior after successful conversation
+                        this.resetUserBehavior(callSid);
+                        
                         return res.send(twiml.toString());
                     }
                 } else if (wordCount <= 2) {
                     // Accept short answer, but confirm
                     let confirmMsg = currentLanguage === 'Bengali' ? `আপনি কি বললেন: '${transcribedText}'? দয়া করে স্পষ্টভাবে বলুন।` : currentLanguage === 'Hindi' ? `क्या आपने कहा: '${transcribedText}'? कृपया स्पष्ट रूप से कहें।` : `Did you say: '${transcribedText}'? Please say it clearly.`;
                     twiml.say({ voice: 'alice', language: this.mapLanguageToTwimlLanguage(currentLanguage) }, confirmMsg);
+                    
+                    // Use dynamic timeout for short responses
+                    const dynamicTimeout = this.getOptimalTimeout(callSid, currentLanguage);
                     twiml.record({
                         action: `/api/twilio/transcribe?campaignId=${campaignId}`,
                         method: 'POST',
                         maxLength: 10,
-                        timeout: 2,
+                        timeout: dynamicTimeout,
                         playBeep: false,
                         trim: 'do-not-trim'
                     });
@@ -811,7 +1047,8 @@ class TwilioController {
                     language: currentLanguage,
                     sampleFlow: campaignSampleFlow,
                     conversationHistory: getConversationHistory({ callSid, campaignId }),
-                    userInput: transcribedText
+                    userInput: transcribedText,
+                    systemPrompt: 'You are a professional telecaller. Keep your responses concise and focused unless the user asks for a detailed description. If the user asks for more details, then provide a longer answer. Try to sense the user\'s sentiment and respond accordingly.'
                 };
                 console.log('🎯 LLM INPUT:', aiParams);
                 const aiReply = await generateReply(aiParams);
@@ -829,10 +1066,38 @@ class TwilioController {
                 // Save to persistent transcript (for long-term storage)
                 console.log('💾 Saving conversation to persistent transcript...');
                 const Transcript = (await import('../models/transcript.model.js')).default;
+                const Contact = (await import('../models/contact.model.js')).default;
                 
-                let transcript = await Transcript.findOne({ campaignId });
+                // Find the contact for this call
+                let contact = null;
+                if (callSid) {
+                    // First try to find contact through call log
+                    const callLog = await CallLog.findOne({ callSid: callSid });
+                    if (callLog && callLog.contactId) {
+                        contact = await Contact.findById(callLog.contactId);
+                        console.log(`✅ Found contact through call log: ${contact?.name} (${contact?.phone})`);
+                    } else {
+                        // Fallback: try to find contact by phone number
+                        contact = await Contact.findOne({ phone: req.body.To || req.query.To });
+                        console.log(`✅ Found contact by phone number: ${contact?.name} (${contact?.phone})`);
+                    }
+                }
+                
+                // Find or create transcript for this specific contact and campaign
+                let transcript = null;
+                if (contact) {
+                    transcript = await Transcript.findOne({ 
+                        contactId: contact._id, 
+                        campaignId: campaignId 
+                    });
+                }
+                
                 if (!transcript) {
-                    transcript = new Transcript({ campaignId, entries: [] });
+                    transcript = new Transcript({ 
+                        contactId: contact?._id,
+                        campaignId: campaignId, 
+                        entries: [] 
+                    });
                 }
                 
                 // Add both user input and AI response to transcript
@@ -841,26 +1106,34 @@ class TwilioController {
                     text: transcribedText,
                     timestamp: new Date()
                 });
-                
                 transcript.entries.push({
                     from: 'ai',
                     text: aiReply,
                     timestamp: new Date()
                 });
-                
-                await transcript.save();
-                console.log('✅ Conversation saved to persistent transcript');
-                
+
+                // Prepare DB save promises
+                const transcriptSavePromise = transcript.save();
+                let contactUpdatePromise = Promise.resolve();
+                if (contact && transcript._id) {
+                    contactUpdatePromise = Contact.findByIdAndUpdate(contact._id, {
+                        transcriptId: transcript._id.toString()
+                    });
+                }
+
                 // Generate TTS audio for AI reply using campaign language
                 console.log('🎵 Converting AI reply to speech using campaign language...');
-                
-                // Use the mapLanguageToSpeaker utility to get correct speaker
                 const speakerMapping = this.mapLanguageToSpeaker(currentLanguage, 'female');
                 console.log(`🗣️ Using speaker: ${speakerMapping} for language: ${currentLanguage}`);
-                
-                // Extract language and gender codes from speaker mapping
                 const [langCode, genderCode] = speakerMapping.split('_');
-                const ttsResult = await ttsService.generateTTSAudio(aiReply, langCode, genderCode, 1.0, 1.0);
+                const ttsPromise = ttsService.generateTTSAudio(aiReply, langCode, genderCode, 1.0, 1.0);
+
+                // Await all in parallel
+                const [ttsResult] = await Promise.all([
+                    ttsPromise,
+                    transcriptSavePromise,
+                    contactUpdatePromise
+                ]);
                 const audioUrl = ttsResult.audioUrl;
                 console.log(`🔗 AI TTS Audio URL: ${audioUrl}`);
                 
@@ -869,18 +1142,26 @@ class TwilioController {
                     console.log('🎵 Playing AI response audio...');
                     twiml.play(audioUrl);
                     
-                    // Add another recording for continued conversation
+                    // Add user feedback message if needed
+                    const feedbackMsg = this.getUserFeedbackMessage(recordingDuration, wordCount, currentLanguage);
+                    if (feedbackMsg) {
+                        console.log(`💬 Adding user feedback: ${feedbackMsg}`);
+                        twiml.say({ voice: 'alice', language: this.mapLanguageToTwimlLanguage(currentLanguage) }, feedbackMsg);
+                    }
+                    
+                    // Add another recording for continued conversation with dynamic timeout
                     console.log('🔄 Adding recording for continued conversation...');
+                    const dynamicTimeout = this.getOptimalTimeout(callSid, currentLanguage);
                     twiml.record({
                         action: `/api/twilio/transcribe?campaignId=${campaignId}`,
                         method: 'POST',
                         maxLength: 10,
-                        timeout: 2,
+                        timeout: dynamicTimeout,
                         playBeep: false,
                         trim: 'do-not-trim'
                     });
                     
-                    console.log('✅ AI conversation flow added to TwiML');
+                    console.log(`✅ AI conversation flow added to TwiML with ${dynamicTimeout}s timeout`);
                 } else {
                     // TTS fallback
                     twiml.say({ voice: 'alice', language: 'en-IN' }, aiReply || 'Please wait...');

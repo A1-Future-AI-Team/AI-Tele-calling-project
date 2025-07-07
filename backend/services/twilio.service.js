@@ -49,27 +49,14 @@ class TwilioService {
      * @returns {string} Reverie speaker identifier
      */
     mapLanguageToSpeaker(language, gender = 'female') {
-        const speakerMap = {
-            'English': {
-                'male': 'en_male',
-                'female': 'en_female'
-            },
-            'Hindi': {
-                'male': 'hi_male',
-                'female': 'hi_female'
-            },
-            'Bengali': {
-                'male': 'bn_male',
-                'female': 'bn_female'
-            }
+        const langMap = {
+            'English': 'en',
+            'Hindi': 'hi',
+            'Bengali': 'bn'
         };
-        
-        const langSpeakers = speakerMap[language];
-        if (!langSpeakers) {
-            return 'hi_female'; // Default to Hindi female
-        }
-        
-        return langSpeakers[gender] || langSpeakers['female'] || 'hi_female';
+        const langCode = langMap[language] || 'en';
+        const genderCode = gender === 'male' ? 'male' : 'female';
+        return `${langCode}_${genderCode}`;
     }
 
     /**
@@ -119,106 +106,7 @@ class TwilioService {
      * @param {string} language - Language for TTS (optional, defaults to Hindi)
      * @returns {Promise} Call result
      */
-    async makeCall(to, campaignId, message = null, language = 'Hindi') {
-        let tempCallSid = uuidv4();
-        let callLogDoc = null;
-        try {
-            // Save call log to database BEFORE placing the call
-            try {
-                callLogDoc = await CallLog.create({
-                    campaignId: campaignId,
-                    language: language,
-                    status: 'initiated',
-                    startTime: new Date(),
-                    contactId: null, // You can update this if you have contact info
-                    aiResponseLog: [],
-                    callSid: tempCallSid, // Temporary, will update after real callSid is known
-                    to: to,
-                    from: this.twilioPhoneNumber
-                });
-                console.log('✅ Call log (pre-call) saved to database');
-            } catch (logErr) {
-                console.error('❌ Failed to pre-save call log:', logErr);
-            }
-
-            console.log(`📞 Making call to ${to} for campaign ${campaignId}`);
-            
-            if (!this.client) {
-                throw new Error('Twilio client not initialized');
-            }
-
-            if (!this.twilioPhoneNumber) {
-                throw new Error('TWILIO_PHONE_NUMBER not set in environment variables');
-            }
-
-            if (!process.env.BASE_URL) {
-                throw new Error('BASE_URL not set in environment variables - required for webhooks');
-            }
-
-            // Use custom message or default test message
-            const ttsMessage = message || 'नमस्ते, यह Reverie और Twilio का टेस्ट कॉल है। आपका स्वागत है।';
-            
-            console.log(`🎵 Generating TTS for message: "${ttsMessage}"`);
-
-            // Generate TTS audio and save to file
-            const audioUrl = await this.generateAndSaveAudio(ttsMessage, language, 'female');
-
-            // Create webhook URL that will serve the audio
-            const webhookUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/api/twilio/play-tts?audioUrl=${encodeURIComponent(audioUrl)}`;
-            console.log(`🔗 Webhook URL: ${webhookUrl}`);
-            console.log(`🔗 Encoded Audio URL: ${encodeURIComponent(audioUrl)}`);
-
-            // Create the voice call using Twilio API
-            const call = await this.client.calls.create({
-                from: this.twilioPhoneNumber,
-                to: to,
-                url: webhookUrl,
-                method: 'POST',
-                statusCallback: `${process.env.BASE_URL}/api/twilio/call-status?campaignId=${campaignId}`,
-                statusCallbackMethod: 'POST',
-                statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed']
-            });
-
-            // Update the call log with the real callSid
-            if (callLogDoc) {
-                try {
-                    callLogDoc.callSid = call.sid;
-                    callLogDoc.save();
-                    console.log('✅ Call log updated with real callSid');
-                } catch (updateErr) {
-                    console.error('❌ Failed to update call log with real callSid:', updateErr);
-                }
-            }
-
-            // Log successful call initiation
-            console.log(`📞 Call initiated to ${to}: SID ${call.sid}`);
-            console.log(`🎵 Audio will be played from: ${audioUrl}`);
-            
-            return {
-                success: true,
-                callSid: call.sid,
-                to: to,
-                from: this.twilioPhoneNumber,
-                campaignId: campaignId,
-                status: call.status,
-                dateCreated: call.dateCreated,
-                audioUrl: audioUrl,
-                webhookUrl: webhookUrl
-            };
-
-        } catch (error) {
-            // Log the error with proper formatting
-            console.error(`❌ Failed to call ${to}: ${error.message}`);
-            
-            return {
-                success: false,
-                error: error.message,
-                to: to,
-                campaignId: campaignId
-            };
-        }
-    }
-
+   
     /**
      * Make a call using existing campaign data (legacy method)
      * @param {string} to - Phone number to call
@@ -229,6 +117,49 @@ class TwilioService {
         let tempCallSid = uuidv4();
         let callLogDoc = null;
         try {
+            // Precompute initial AI greeting and TTS audio
+            const Campaign = (await import('../models/campaign.model.js')).default;
+            const Transcript = (await import('../models/transcript.model.js')).default;
+            const Contact = (await import('../models/contact.model.js')).default;
+            const ttsService = (await import('./tts.service.js')).default;
+            const { generateReply } = await import('./llm.service.js');
+
+            const campaign = await Campaign.findById(campaignId);
+            let initialGreetingText = '';
+            let initialGreetingAudioUrl = '';
+            if (campaign) {
+                const aiParams = {
+                    objective: campaign.objective,
+                    language: campaign.language,
+                    sampleFlow: campaign.sampleFlow || '',
+                    conversationHistory: [],
+                    userInput: 'Start the conversation naturally in ' + campaign.language + '. Greet the customer and introduce yourself as a human agent.',
+                    systemPrompt: 'You are a professional telecaller. Keep your responses concise and focused unless the user asks for a detailed description. If the user asks for more details, then provide a longer answer. Try to sense the user\'s sentiment and respond accordingly.'
+                };
+                initialGreetingText = await generateReply(aiParams);
+                const speakerMapping = this.mapLanguageToSpeaker(campaign.language, 'female');
+                const [langCode, genderCode] = speakerMapping.split('_');
+                const ttsResult = await ttsService.generateTTSAudio(initialGreetingText, langCode, genderCode, 1.0, 1.0);
+                initialGreetingAudioUrl = ttsResult.audioUrl;
+
+                // Save to transcript (if not already present)
+                const contact = await Contact.findOne({ phone: to, campaignId });
+                if (contact) {
+                    let transcript = await Transcript.findOne({ contactId: contact._id, campaignId });
+                    if (!transcript) {
+                        transcript = new Transcript({ contactId: contact._id, campaignId, entries: [] });
+                    }
+                    // Only add if not already present
+                    if (!transcript.entries.some(e => e.from === 'ai' && e.text === initialGreetingText)) {
+                        transcript.entries.push({ from: 'ai', text: initialGreetingText, timestamp: new Date() });
+                        await transcript.save();
+                    }
+                }
+            }
+
+            // Find contact by phone number
+            const contact = await Contact.findOne({ phone: to });
+            
             // Save call log to database BEFORE placing the call
             try {
                 callLogDoc = await CallLog.create({
@@ -236,13 +167,18 @@ class TwilioService {
                     language: 'Hindi', // Default language for legacy calls
                     status: 'initiated',
                     startTime: new Date(),
-                    contactId: null, // You can update this if you have contact info
+                    contactId: contact?._id, // Link to contact if found
                     aiResponseLog: [],
                     callSid: tempCallSid, // Temporary, will update after real callSid is known
                     to: to,
-                    from: this.twilioPhoneNumber
+                    from: this.twilioPhoneNumber,
+                    initialGreetingText,
+                    initialGreetingAudioUrl
                 });
                 console.log('✅ Call log (pre-call) saved to database for legacy call');
+                if (contact) {
+                    console.log(`✅ Call log linked to contact: ${contact.name} (${contact.phone})`);
+                }
             } catch (logErr) {
                 console.error('❌ Failed to pre-save call log for legacy call:', logErr);
             }

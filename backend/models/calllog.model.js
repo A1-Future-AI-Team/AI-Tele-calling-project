@@ -41,6 +41,12 @@ const callLogSchema = new mongoose.Schema({
     },
     from: {
         type: String
+    },
+    initialGreetingText: {
+        type: String
+    },
+    initialGreetingAudioUrl: {
+        type: String
     }
 }, {
     timestamps: true

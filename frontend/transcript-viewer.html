@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcript Viewer - TeleCall AI</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/dashboard.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .transcript-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.1);
+        }
+        
+        .transcript-header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #f1f5f9;
+        }
+        
+        .transcript-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+        
+        .transcript-meta {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            font-size: 0.9rem;
+            color: #64748b;
+        }
+        
+        .transcript-entries {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .transcript-entry {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            background: #f8fafc;
+            border-left: 4px solid #667eea;
+        }
+        
+        .transcript-entry.user {
+            background: #f0f9ff;
+            border-left-color: #0ea5e9;
+        }
+        
+        .transcript-entry.ai {
+            background: #f0fdf4;
+            border-left-color: #10b981;
+        }
+        
+        .entry-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: white;
+            flex-shrink: 0;
+        }
+        
+        .entry-avatar.user {
+            background: #0ea5e9;
+        }
+        
+        .entry-avatar.ai {
+            background: #10b981;
+        }
+        
+        .entry-content {
+            flex: 1;
+        }
+        
+        .entry-sender {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .entry-text {
+            color: #334155;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        
+        .entry-time {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            margin-top: 0.5rem;
+        }
+        
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: background 0.2s;
+            margin-bottom: 1rem;
+        }
+        
+        .back-button:hover {
+            background: #5a67d8;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }
+        
+        .error {
+            text-align: center;
+            padding: 3rem;
+            color: #ef4444;
+        }
+        
+        @media (max-width: 768px) {
+            .transcript-container {
+                margin: 1rem;
+                padding: 1rem;
+            }
+            
+            .transcript-meta {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .transcript-entry {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="transcript-container">
+            <a href="javascript:history.back()" class="back-button">
+                <i class="fas fa-arrow-left"></i>
+                Back to Call Logs
+            </a>
+            
+            <div id="loading" class="loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                Loading transcript...
+            </div>
+            
+            <div id="error" class="error" style="display: none;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Failed to load transcript</p>
+            </div>
+            
+            <div id="transcript-content" style="display: none;">
+                <div class="transcript-header">
+                    <h1 class="transcript-title">Call Transcript</h1>
+                    <div class="transcript-meta">
+                        <span id="contact-info">Contact: Loading...</span>
+                        <span id="campaign-info">Campaign: Loading...</span>
+                        <span id="call-status">Status: Loading...</span>
+                        <span id="call-duration">Duration: Loading...</span>
+                    </div>
+                </div>
+                
+                <div id="transcript-entries" class="transcript-entries">
+                    <!-- Transcript entries will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadTranscript() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const transcriptId = urlParams.get('id');
+            
+            if (!transcriptId) {
+                showError('No transcript ID provided');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/transcript/${transcriptId}`);
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to load transcript');
+                }
+                
+                displayTranscript(result.data);
+            } catch (error) {
+                console.error('Error loading transcript:', error);
+                showError(error.message);
+            }
+        }
+        
+        function displayTranscript(data) {
+            const transcript = data;
+            
+            // Update header information
+            document.getElementById('contact-info').textContent = 
+                `Contact: ${transcript.contactId?.name || 'Unknown'} (${transcript.contactId?.phone || 'Unknown'})`;
+            document.getElementById('campaign-info').textContent = 
+                `Campaign: ${transcript.campaignId?.objective || 'Unknown'}`;
+            
+            // Display transcript entries
+            const entriesContainer = document.getElementById('transcript-entries');
+            entriesContainer.innerHTML = '';
+            
+            if (!transcript.entries || transcript.entries.length === 0) {
+                entriesContainer.innerHTML = '<p style="text-align: center; color: #64748b;">No conversation entries found</p>';
+            } else {
+                transcript.entries.forEach(entry => {
+                    const entryElement = document.createElement('div');
+                    entryElement.className = `transcript-entry ${entry.from}`;
+                    
+                    const avatar = entry.from === 'user' ? 'U' : 'AI';
+                    const senderName = entry.from === 'user' ? 'User' : 'AI Assistant';
+                    
+                    entryElement.innerHTML = `
+                        <div class="entry-avatar ${entry.from}">${avatar}</div>
+                        <div class="entry-content">
+                            <div class="entry-sender">${senderName}</div>
+                            <div class="entry-text">${entry.text}</div>
+                            <div class="entry-time">${new Date(entry.timestamp).toLocaleString()}</div>
+                        </div>
+                    `;
+                    
+                    entriesContainer.appendChild(entryElement);
+                });
+            }
+            
+            // Hide loading, show content
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('transcript-content').style.display = 'block';
+        }
+        
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('error').innerHTML = `
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>${message}</p>
+            `;
+        }
+        
+        // Load transcript when page loads
+        document.addEventListener('DOMContentLoaded', loadTranscript);
+    </script>
+</body>
+</html> 

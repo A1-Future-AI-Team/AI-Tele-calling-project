@@ -13,6 +13,7 @@ import campaignRoutes from './routes/campaign.route.js';
 import twilioRoutes from './routes/twilio.route.js';
 import ttsRoutes from './routes/tts.route.js';
 import callLogRoutes from './routes/calllog.route.js';
+import transcriptRoutes from './routes/transcript.route.js';
 
 dotenv.config();
 
@@ -82,6 +83,7 @@ class App {
         this.app.use('/api/twilio', twilioRoutes);
         this.app.use('/api/tts', ttsRoutes);
         this.app.use('/api', callLogRoutes);
+        this.app.use('/api/transcript', transcriptRoutes);
         
         // Health check route
     this.app.get('/health', (req, res) => {
@@ -108,6 +110,10 @@ class App {
         
         this.app.get('/logs', (req, res) => {
             res.sendFile(path.join(__dirname, '..', 'frontend', 'logs.html'));
+        });
+        
+        this.app.get('/transcript-viewer', (req, res) => {
+            res.sendFile(path.join(__dirname, '..', 'frontend', 'transcript-viewer.html'));
         });
 
         // Catch-all handler for frontend routes (SPA support)
@@ -152,6 +158,29 @@ class App {
     }
 }
 
+async function prewarmLLMandTTS() {
+  if (process.env.NODE_ENV !== 'production') return; // Only prewarm in production
+  try {
+    const ttsService = (await import('./services/tts.service.js')).default;
+    const { generateReply } = await import('./services/llm.service.js');
+    // Prewarm LLM
+    await generateReply({
+      objective: 'Prewarm',
+      language: 'English',
+      sampleFlow: '',
+      conversationHistory: [],
+      userInput: 'Hi', // Use shortest possible text
+      systemPrompt: 'This is a prewarm request.'
+    });
+    // Prewarm TTS (do NOT save file, use shortest text)
+    await ttsService.callReverieTTSAPI('Hi', 'en', 'female', 1.0, 1.0);
+    console.log('✅ LLM and TTS prewarmed (production only)');
+  } catch (err) {
+    console.warn('⚠️ LLM/TTS prewarm failed:', err.message);
+  }
+}
+
+prewarmLLMandTTS();
 
 const application = new App();
 application.listen();
