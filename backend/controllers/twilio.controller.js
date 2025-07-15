@@ -172,7 +172,7 @@ class TwilioController {
                     // Add recording capability for dynamic AI conversation
                     console.log('🎤 Adding recording capability for user response...');
                     twiml.record({
-                        action: `/api/twilio/transcribe?campaignId=${campaignId}`,
+                        action: `/api/twilio/transcribe`,
                         method: 'POST',
                         maxLength: 10,
                         timeout: 2,
@@ -315,7 +315,8 @@ class TwilioController {
                 if (campaignId) {
                     // CRITICAL FIX: Find contact by BOTH phone number AND campaignId
                     // This prevents the bug where same phone number in different campaigns gets mixed up
-                    contact = await Contact.findOne({ 
+                    contact = await Contact.findOne(
+                        { 
                         phone: To, 
                         campaignId: campaignId 
                     });
@@ -690,17 +691,12 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
                 const audioUrl = ttsResult.audioUrl;
                 console.log(`🔗 Generated TTS Audio URL: ${audioUrl}`);
                 if (audioUrl) {
-                    console.log('🎵 Adding TTS audio to TwiML...');
-                    twiml.play(audioUrl);
-                    twiml.record({
-                        action: `/api/twilio/transcribe?campaignId=${campaignId}`,
-                        method: 'POST',
-                        maxLength: 10,
-                        timeout: 2,
-                        playBeep: false,
-                        trim: 'do-not-trim'
-                    });
-                    console.log('✅ Campaign-based AI response added to TwiML');
+                    console.log('🎵 Adding TTS audio to TwiML with barge-in support...');
+                    this.createBargeInResponse(twiml, audioUrl, campaignId, language);
+                    res.type('text/xml');
+                    res.send(twiml.toString());
+                    console.log('✅ Campaign-based AI response with barge-in sent successfully');
+                    return;
                 } else {
                     throw new Error('Failed to generate TTS audio');
                 }
@@ -719,6 +715,198 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
             res.type('text/xml');
             res.send(twiml.toString());
         }
+    }
+
+    /**
+     * Handle speech input from Gather with barge-in support
+     * This endpoint processes user speech that interrupted TTS playback
+     */
+    async processSpeech(req, res) {
+        try {
+            console.log('🎤 Process speech webhook received (barge-in)');
+            console.log('Request body:', req.body);
+            
+            const { SpeechResult, Confidence, CallSid } = req.body;
+            let campaignId = req.body.campaignId || req.query.campaignId;
+            
+            if (!CallSid || !campaignId) {
+                console.error('❌ Missing required parameters: CallSid or campaignId');
+                const twiml = new twilio.twiml.VoiceResponse();
+                twiml.say({ voice: 'alice', language: 'en-IN' }, 'Sorry, missing call information.');
+                res.type('text/xml');
+                return res.send(twiml.toString());
+            }
+
+            // Fetch campaign
+            const campaign = await Campaign.findById(campaignId);
+            if (!campaign) {
+                console.error('❌ Campaign not found for campaignId:', campaignId);
+                const twiml = new twilio.twiml.VoiceResponse();
+                twiml.say({ voice: 'alice', language: 'en-IN' }, 'Campaign not found.');
+                res.type('text/xml');
+                return res.send(twiml.toString());
+            }
+
+            const currentLanguage = campaign.language || 'Hindi';
+            const campaignObjective = campaign.objective || '';
+            const campaignSampleFlow = campaign.sampleFlow || '';
+
+            console.log(`🎤 User speech detected: "${SpeechResult}"`);
+            console.log(`📊 Confidence: ${Confidence}`);
+            console.log(`📋 Language: ${currentLanguage}`);
+
+            // Process the speech input similar to transcribeAudio
+            const twiml = new twilio.twiml.VoiceResponse();
+            
+            try {
+                // Save user speech to memory
+                saveMessage({ callSid: CallSid, campaignId, role: 'user', content: SpeechResult });
+                
+                // Generate AI response
+                const aiParams = {
+                    objective: campaignObjective,
+                    language: currentLanguage,
+                    sampleFlow: campaignSampleFlow,
+                    conversationHistory: getConversationHistory({ callSid: CallSid, campaignId }),
+                    userInput: SpeechResult,
+                    systemPrompt: 'You are a professional telecaller. Keep your responses concise and focused unless the user asks for a detailed description. If the user asks for more details, then provide a longer answer. Try to sense the user\'s sentiment and respond accordingly.'
+                };
+                
+                console.log('🎯 LLM INPUT:', aiParams);
+                const { generateReply } = await import('../services/llm.service.js');
+                const aiReply = await generateReply(aiParams);
+                saveMessage({ callSid: CallSid, campaignId, role: 'assistant', content: aiReply });
+                
+                // Save to transcript
+                const Transcript = (await import('../models/transcript.model.js')).default;
+                const Contact = (await import('../models/contact.model.js')).default;
+                
+                let contact = null;
+                const callLog = await CallLog.findOne({ callSid: CallSid });
+                if (callLog && callLog.contactId) {
+                    contact = await Contact.findById(callLog.contactId);
+                }
+                
+                let transcript = null;
+                if (contact) {
+                    transcript = await Transcript.findOne({ 
+                        contactId: contact._id, 
+                        campaignId: campaignId 
+                    });
+                }
+                
+                if (!transcript) {
+                    transcript = new Transcript({ 
+                        contactId: contact?._id,
+                        campaignId: campaignId, 
+                        entries: [] 
+                    });
+                }
+                
+                // Add conversation to transcript
+                transcript.entries.push({
+                    from: 'user',
+                    text: SpeechResult,
+                    timestamp: new Date()
+                });
+                transcript.entries.push({
+                    from: 'ai',
+                    text: aiReply,
+                    timestamp: new Date()
+                });
+
+                // Generate TTS audio for AI reply
+                const speakerMapping = this.mapLanguageToSpeaker(currentLanguage, 'female');
+                const [langCode, genderCode] = speakerMapping.split('_');
+                const ttsResult = await ttsService.generateTTSAudio(aiReply, langCode, genderCode, 1.0, 1.0);
+                const audioUrl = ttsResult.audioUrl;
+                
+                // Save transcript
+                await transcript.save();
+                if (contact && transcript._id) {
+                    await Contact.findByIdAndUpdate(contact._id, {
+                        transcriptId: transcript._id.toString()
+                    });
+                }
+                
+                // Return barge-in enabled response
+                if (audioUrl) {
+                    console.log('🎵 Playing AI response with barge-in support...');
+                    this.createBargeInResponse(twiml, audioUrl, campaignId, currentLanguage);
+                    res.type('text/xml');
+                    res.send(twiml.toString());
+                    console.log('✅ Process speech response with barge-in sent successfully');
+                    return;
+                } else {
+                    throw new Error('Failed to generate TTS audio');
+                }
+                
+            } catch (aiError) {
+                console.error('❌ Error in AI response generation:', aiError.message);
+                twiml.say({ voice: 'alice', language: 'en-IN' }, 'Thank you for your response. We have received your message.');
+            }
+            
+            res.type('text/xml');
+            res.send(twiml.toString());
+            
+        } catch (error) {
+            console.error('❌ Error in process speech webhook:', error);
+            const twiml = new twilio.twiml.VoiceResponse();
+            twiml.say({ voice: 'alice', language: 'en-IN' }, 'Sorry, there was an error processing your speech.');
+            res.type('text/xml');
+            res.send(twiml.toString());
+        }
+    }
+
+    /**
+     * Create TwiML response with barge-in support using Gather
+     * @param {Object} twiml - Twilio VoiceResponse object
+     * @param {string} audioUrl - URL of TTS audio to play
+     * @param {string} campaignId - Campaign ID
+     * @param {string} language - Language for speech recognition
+     * @returns {Object} TwiML response
+     */
+    createBargeInResponse(twiml, audioUrl, campaignId, language) {
+        console.log('🎵 Creating barge-in enabled TwiML response...');
+        
+        // Map language to Twilio speech recognition language
+        const speechLanguageMap = {
+            'English': 'en-US',
+            'Hindi': 'hi-IN',
+            'Bengali': 'bn-IN'
+        };
+        const speechLang = speechLanguageMap[language] || 'en-US';
+        
+        // Create Gather with barge-in enabled
+        const gather = twiml.gather({
+            input: 'speech',
+            language: speechLang,
+            bargeIn: 'true',
+            action: `/api/twilio/process-speech?campaignId=${campaignId}`,
+            method: 'POST',
+            speechTimeout: 'auto',
+            enhanced: 'true',
+            speechModel: 'phone_call'
+        });
+        
+        // Play TTS audio inside Gather (interruptible)
+        gather.play(audioUrl);
+        
+        // Fallback if no speech detected
+        twiml.say({ voice: 'alice', language: 'en-IN' }, 'Please speak after the beep.');
+        twiml.record({
+            action: `/api/twilio/transcribe?campaignId=${campaignId}`,
+            method: 'POST',
+            maxLength: 10,
+            timeout: 5,
+            playBeep: true,
+            trim: 'do-not-trim'
+        });
+        
+        console.log('✅ Barge-in TwiML response created');
+        console.log('📄 Generated TwiML:');
+        console.log(twiml.toString());
+        return twiml;
     }
 
     /**
@@ -1137,31 +1325,14 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
                 const audioUrl = ttsResult.audioUrl;
                 console.log(`🔗 AI TTS Audio URL: ${audioUrl}`);
                 
-                // Play AI response
+                // Play AI response with barge-in support
                 if (audioUrl) {
-                    console.log('🎵 Playing AI response audio...');
-                    twiml.play(audioUrl);
-                    
-                    // Add user feedback message if needed
-                    const feedbackMsg = this.getUserFeedbackMessage(recordingDuration, wordCount, currentLanguage);
-                    if (feedbackMsg) {
-                        console.log(`💬 Adding user feedback: ${feedbackMsg}`);
-                        twiml.say({ voice: 'alice', language: this.mapLanguageToTwimlLanguage(currentLanguage) }, feedbackMsg);
-                    }
-                    
-                    // Add another recording for continued conversation with dynamic timeout
-                    console.log('🔄 Adding recording for continued conversation...');
-                    const dynamicTimeout = this.getOptimalTimeout(callSid, currentLanguage);
-                    twiml.record({
-                        action: `/api/twilio/transcribe?campaignId=${campaignId}`,
-                        method: 'POST',
-                        maxLength: 10,
-                        timeout: dynamicTimeout,
-                        playBeep: false,
-                        trim: 'do-not-trim'
-                    });
-                    
-                    console.log(`✅ AI conversation flow added to TwiML with ${dynamicTimeout}s timeout`);
+                    console.log('🎵 Playing AI response audio with barge-in support...');
+                    this.createBargeInResponse(twiml, audioUrl, campaignId, currentLanguage);
+                    res.type('text/xml');
+                    res.send(twiml.toString());
+                    console.log('✅ AI response with barge-in sent successfully');
+                    return;
                 } else {
                     // TTS fallback
                     twiml.say({ voice: 'alice', language: 'en-IN' }, aiReply || 'Please wait...');
@@ -1218,6 +1389,238 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
             return res.status(500).json({ error: error.message });
         }
     }
+
+    /**
+     * Simple example demonstrating barge-in functionality
+     * This method shows how to create a basic barge-in enabled response
+     */
+    async exampleBargeIn(req, res) {
+        try {
+            console.log('🎤 Example barge-in webhook received');
+            
+            const twiml = new twilio.twiml.VoiceResponse();
+            
+            // Create Gather with barge-in enabled
+            const gather = twiml.gather({
+                input: 'speech',           // Enable speech input
+                language: 'en-US',         // Speech recognition language
+                bargeIn: 'true',           // Allow user to interrupt TTS
+                action: '/api/twilio/process-speech',  // Where to send speech results
+                method: 'POST',
+                speechTimeout: 'auto',     // Wait for natural speech pauses
+                enhanced: 'true',          // Use enhanced speech recognition
+                speechModel: 'phone_call'  // Optimized for phone calls
+            });
+            
+            // Play TTS audio inside Gather (this can be interrupted)
+            gather.play('https://your-domain.com/audio/tts_generated_audio.wav');
+            
+            // Fallback if no speech detected
+            twiml.say({ voice: 'alice', language: 'en-US' }, 'Please speak after the beep.');
+            twiml.record({
+                action: '/api/twilio/transcribe',
+                method: 'POST',
+                maxLength: 10,
+                timeout: 5,
+                playBeep: true,
+                trim: 'do-not-trim'
+            });
+            
+            res.type('text/xml');
+            res.send(twiml.toString());
+            
+            console.log('✅ Example barge-in TwiML response sent');
+            
+        } catch (error) {
+            console.error('❌ Error in example barge-in:', error);
+            const twiml = new twilio.twiml.VoiceResponse();
+            twiml.say('Sorry, there was an error.');
+            res.type('text/xml');
+            res.send(twiml.toString());
+        }
+    }
+
+    /**
+     * Simple test endpoint for barge-in functionality
+     * This is a safe way to test barge-in without affecting the main flow
+     */
+    async testBargeIn(req, res) {
+        try {
+            console.log('🧪 Test barge-in webhook received');
+            
+            const twiml = new twilio.twiml.VoiceResponse();
+            
+            // Simple test with basic TTS
+            twiml.say({ 
+                voice: 'alice', 
+                language: 'en-US' 
+            }, 'Hello! This is a test of barge-in functionality. You can interrupt me at any time by speaking.');
+            
+            // Create Gather with barge-in enabled
+            const gather = twiml.gather({
+                input: 'speech',
+                language: 'en-US',
+                bargeIn: 'true',
+                action: '/api/twilio/test-barge-in-response',
+                method: 'POST',
+                speechTimeout: 'auto',
+                enhanced: 'true',
+                speechModel: 'phone_call'
+            });
+            
+            // Play a simple message that can be interrupted
+            gather.say({ 
+                voice: 'alice', 
+                language: 'en-US' 
+            }, 'This message can be interrupted. Please try speaking while I am talking.');
+            
+            // Fallback if no speech detected
+            twiml.say({ voice: 'alice', language: 'en-US' }, 'No speech detected. Test completed.');
+            
+            res.type('text/xml');
+            res.send(twiml.toString());
+            
+            console.log('✅ Test barge-in TwiML response sent');
+            
+        } catch (error) {
+            console.error('❌ Error in test barge-in:', error);
+            const twiml = new twilio.twiml.VoiceResponse();
+            twiml.say('Sorry, there was an error in the test.');
+            res.type('text/xml');
+            res.send(twiml.toString());
+        }
+    }
+
+    /**
+     * Handle test barge-in response
+     */
+    async testBargeInResponse(req, res) {
+        try {
+            console.log('🧪 Test barge-in response received');
+            console.log('Request body:', req.body);
+            
+            const { SpeechResult, Confidence } = req.body;
+            
+            const twiml = new twilio.twiml.VoiceResponse();
+            
+            if (SpeechResult) {
+                console.log(`🎤 Test speech detected: "${SpeechResult}"`);
+                console.log(`📊 Confidence: ${Confidence}`);
+                
+                twiml.say({ 
+                    voice: 'alice', 
+                    language: 'en-US' 
+                }, `Great! You successfully interrupted the message. You said: ${SpeechResult}. Test completed successfully.`);
+            } else {
+                twiml.say({ 
+                    voice: 'alice', 
+                    language: 'en-US' 
+                }, 'No speech was detected. Test completed.');
+            }
+            
+            res.type('text/xml');
+            res.send(twiml.toString());
+            
+        } catch (error) {
+            console.error('❌ Error in test barge-in response:', error);
+            const twiml = new twilio.twiml.VoiceResponse();
+            twiml.say('Sorry, there was an error processing the test response.');
+            res.type('text/xml');
+            res.send(twiml.toString());
+        }
+    }
+
+    /**
+     * Simple barge-in test with clear instructions
+     */
+    async simpleBargeInTest(req, res) {
+        try {
+            console.log('🧪 Simple barge-in test received');
+            
+            const twiml = new twilio.twiml.VoiceResponse();
+            
+            // Initial instruction
+            twiml.say({ 
+                voice: 'alice', 
+                language: 'en-US' 
+            }, 'This is a barge-in test. I will now play a long message that you can interrupt by speaking.');
+            
+            // Create Gather with barge-in enabled
+            const gather = twiml.gather({
+                input: 'speech',
+                language: 'en-US',
+                bargeIn: 'true',
+                action: '/api/twilio/simple-barge-in-response',
+                method: 'POST',
+                speechTimeout: 'auto',
+                enhanced: 'true',
+                speechModel: 'phone_call'
+            });
+            
+            // Play a long message that can be interrupted
+            gather.say({ 
+                voice: 'alice', 
+                language: 'en-US' 
+            }, 'This is a very long message that should be interruptible. You can start speaking at any time to interrupt this message. The barge-in functionality should allow you to speak while I am talking. Try saying something like hello or stop or interrupt me now.');
+            
+            // Fallback if no speech detected
+            twiml.say({ voice: 'alice', language: 'en-US' }, 'No interruption detected. Test completed.');
+            
+            console.log('📄 Simple barge-in test TwiML:');
+            console.log(twiml.toString());
+            
+            res.type('text/xml');
+            res.send(twiml.toString());
+            
+            console.log('✅ Simple barge-in test sent');
+            
+        } catch (error) {
+            console.error('❌ Error in simple barge-in test:', error);
+            const twiml = new twilio.twiml.VoiceResponse();
+            twiml.say('Sorry, there was an error in the test.');
+            res.type('text/xml');
+            res.send(twiml.toString());
+        }
+    }
+
+    /**
+     * Handle simple barge-in test response
+     */
+    async simpleBargeInResponse(req, res) {
+        try {
+            console.log('🧪 Simple barge-in response received');
+            console.log('Request body:', req.body);
+            
+            const { SpeechResult, Confidence } = req.body;
+            
+            const twiml = new twilio.twiml.VoiceResponse();
+            
+            if (SpeechResult) {
+                console.log(`🎤 Barge-in successful! Speech detected: "${SpeechResult}"`);
+                console.log(`📊 Confidence: ${Confidence}`);
+                
+                twiml.say({ 
+                    voice: 'alice', 
+                    language: 'en-US' 
+                }, `Excellent! Barge-in is working perfectly. You successfully interrupted the message and said: ${SpeechResult}. The confidence level was ${Confidence}. Test completed successfully!`);
+            } else {
+                twiml.say({ 
+                    voice: 'alice', 
+                    language: 'en-US' 
+                }, 'No speech was detected during the test. Barge-in may not be working properly.');
+            }
+            
+            res.type('text/xml');
+            res.send(twiml.toString());
+            
+        } catch (error) {
+            console.error('❌ Error in simple barge-in response:', error);
+            const twiml = new twilio.twiml.VoiceResponse();
+            twiml.say('Sorry, there was an error processing the test response.');
+            res.type('text/xml');
+            res.send(twiml.toString());
+        }
+    }
 }
 
 // Export the class instance with properly bound methods
@@ -1230,6 +1633,13 @@ twilioController.testSimpleAudio = twilioController.testSimpleAudio.bind(twilioC
 twilioController.voiceResponse = twilioController.voiceResponse.bind(twilioController);
 twilioController.transcribeAudio = twilioController.transcribeAudio.bind(twilioController);
 twilioController.getCallStatusBySid = twilioController.getCallStatusBySid.bind(twilioController);
+twilioController.processSpeech = twilioController.processSpeech.bind(twilioController);
+twilioController.createBargeInResponse = twilioController.createBargeInResponse.bind(twilioController);
+twilioController.exampleBargeIn = twilioController.exampleBargeIn.bind(twilioController);
+twilioController.testBargeIn = twilioController.testBargeIn.bind(twilioController);
+twilioController.testBargeInResponse = twilioController.testBargeInResponse.bind(twilioController);
+twilioController.simpleBargeInTest = twilioController.simpleBargeInTest.bind(twilioController);
+twilioController.simpleBargeInResponse = twilioController.simpleBargeInResponse.bind(twilioController);
 
 // Export both controller and conversation manager
 export default twilioController; 

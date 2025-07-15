@@ -37,17 +37,12 @@ class TTSService {
     // Call Reverie TTS API directly via HTTP using official documentation format
     async callReverieTTSAPI(text, language = 'en', gender = 'female', speed = 1.0, pitch = 1.0) {
         try {
-            console.log('🌐 Making HTTP request to Reverie TTS API...');
-            console.log('📝 Using official API format from documentation');
-            
             // Map language code
             const languageMap = this.getLanguageMapping();
             const reverieLanguage = languageMap[language] || 'en';
             
             // Generate speaker format according to documentation (e.g., 'hi_female', 'en_male')
             const speaker = `${reverieLanguage}_${gender}`;
-            
-            console.log(`🎯 Using speaker: ${speaker}`);
             
             // Request body - only contains text according to documentation
             const payload = {
@@ -63,13 +58,6 @@ class TTSService {
                 'Content-Type': 'application/json'
             };
             
-            console.log('📡 Payload:', JSON.stringify(payload, null, 2));
-            console.log('📡 Headers:', { 
-                ...headers, 
-                'REV-API-KEY': '[REDACTED]',
-                'REV-APP-ID': headers['REV-APP-ID']
-            });
-            
             // Request audio as buffer for direct saving
             const response = await axios.post(this.reverieApiUrl, payload, {
                 headers: headers,
@@ -77,15 +65,9 @@ class TTSService {
                 responseType: 'arraybuffer' // Get raw binary data
             });
             
-            console.log('✅ Reverie API response status:', response.status);
-            // console.log('📊 Response headers:', response.headers);
-            console.log('📏 Audio data size:', response.data.byteLength, 'bytes');
-            
             if (!response.data || response.data.byteLength === 0) {
                 throw new Error('No audio data received from Reverie TTS API');
             }
-            
-            console.log('🎵 WAV audio data received from Reverie API');
             
             // Return raw audio buffer
             return response.data;
@@ -95,8 +77,14 @@ class TTSService {
             
             if (error.response) {
                 console.error('❌ API Response Status:', error.response.status);
-                console.error('❌ API Response Headers:', error.response.headers);
-                console.error('❌ API Response Data Length:', error.response.data?.byteLength || 'unknown');
+                
+                // Try to parse error message if it's JSON
+                try {
+                    const errorData = JSON.parse(error.response.data.toString());
+                    console.error('❌ API Error Message:', errorData.message || 'Unknown error');
+                } catch (e) {
+                    console.error('❌ Raw Error Data:', error.response.data.toString());
+                }
             }
             
             throw error;
@@ -106,12 +94,8 @@ class TTSService {
     // Generate TTS audio using Reverie and save directly (no conversion needed)
     async generateTTSAudio(text, language = 'en', gender = 'female', speed = 1.0, pitch = 1.0) {
         try {
-            console.log('🎤 Generating TTS audio with params:', { text, language, gender, speed, pitch });
-            
             // Call Reverie TTS API directly
             const audioBuffer = await this.callReverieTTSAPI(text, language, gender, speed, pitch);
-            
-            console.log('🎵 Audio received from Reverie, saving directly...');
             
             // Create unique filename
             const timestamp = Date.now();
@@ -120,9 +104,6 @@ class TTSService {
             // Save WAV file directly (no conversion needed)
             const outputPath = path.join(this.audioDirectory, outputFileName);
             fs.writeFileSync(outputPath, audioBuffer);
-            
-            console.log('✅ Audio saved successfully:', outputPath);
-            console.log('🎵 Format: WAV (native from Reverie, Twilio-compatible)');
             
             return {
                 success: true,

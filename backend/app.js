@@ -21,6 +21,9 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Simple logging configuration
+const isVerboseLogging = process.env.NODE_ENV === 'development' && process.env.VERBOSE_LOGS === 'true';
+
 class App {
   constructor() {
     this.app = express();
@@ -47,7 +50,13 @@ class App {
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
     }));
-    this.app.use(morgan('combined'));
+    
+    // Use minimal logging in production, combined in development
+    if (isVerboseLogging) {
+      this.app.use(morgan('combined'));
+    } else {
+      this.app.use(morgan('tiny'));
+    }
     
     // Fix: Use extended: false for Twilio form-encoded data
     this.app.use(express.urlencoded({ extended: false }));

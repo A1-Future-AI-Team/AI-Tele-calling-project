@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import ttsService from './tts.service.js';
 import CallLog from '../models/calllog.model.js';
+import Contact from '../models/contact.model.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // Load environment variables
@@ -114,68 +115,24 @@ class TwilioService {
      * @returns {Promise} Call result
      */
     async makeCallLegacy(to, campaignId) {
-        let tempCallSid = uuidv4();
-        let callLogDoc = null;
         try {
-            // Precompute initial AI greeting and TTS audio
-            const Campaign = (await import('../models/campaign.model.js')).default;
-            const Transcript = (await import('../models/transcript.model.js')).default;
-            const Contact = (await import('../models/contact.model.js')).default;
-            const ttsService = (await import('./tts.service.js')).default;
-            const { generateReply } = await import('./llm.service.js');
-
-            const campaign = await Campaign.findById(campaignId);
-            let initialGreetingText = '';
-            let initialGreetingAudioUrl = '';
-            if (campaign) {
-                const aiParams = {
-                    objective: campaign.objective,
-                    language: campaign.language,
-                    sampleFlow: campaign.sampleFlow || '',
-                    conversationHistory: [],
-                    userInput: 'Start the conversation naturally in ' + campaign.language + '. Greet the customer and introduce yourself as a human agent.',
-                    systemPrompt: 'You are a professional telecaller. Keep your responses concise and focused unless the user asks for a detailed description. If the user asks for more details, then provide a longer answer. Try to sense the user\'s sentiment and respond accordingly.'
-                };
-                initialGreetingText = await generateReply(aiParams);
-                const speakerMapping = this.mapLanguageToSpeaker(campaign.language, 'female');
-                const [langCode, genderCode] = speakerMapping.split('_');
-                const ttsResult = await ttsService.generateTTSAudio(initialGreetingText, langCode, genderCode, 1.0, 1.0);
-                initialGreetingAudioUrl = ttsResult.audioUrl;
-
-                // Save to transcript (if not already present)
-                const contact = await Contact.findOne({ phone: to, campaignId });
-                if (contact) {
-                    let transcript = await Transcript.findOne({ contactId: contact._id, campaignId });
-                    if (!transcript) {
-                        transcript = new Transcript({ contactId: contact._id, campaignId, entries: [] });
-                    }
-                    // Only add if not already present
-                    if (!transcript.entries.some(e => e.from === 'ai' && e.text === initialGreetingText)) {
-                        transcript.entries.push({ from: 'ai', text: initialGreetingText, timestamp: new Date() });
-                        await transcript.save();
-                    }
-                }
-            }
-
-            // Find contact by phone number
-            const contact = await Contact.findOne({ phone: to });
-            
-            // Save call log to database BEFORE placing the call
+            // Pre-save call log to database
+            let callLogDoc = null;
             try {
-                callLogDoc = await CallLog.create({
+                callLogDoc = new CallLog({
+                    callSid: `temp_${Date.now()}`,
                     campaignId: campaignId,
-                    language: 'Hindi', // Default language for legacy calls
-                    status: 'initiated',
-                    startTime: new Date(),
-                    contactId: contact?._id, // Link to contact if found
-                    aiResponseLog: [],
-                    callSid: tempCallSid, // Temporary, will update after real callSid is known
                     to: to,
                     from: this.twilioPhoneNumber,
-                    initialGreetingText,
-                    initialGreetingAudioUrl
+                    status: 'initiated',
+                    language: 'Hindi', // Default language
+                    createdAt: new Date()
                 });
-                console.log('✅ Call log (pre-call) saved to database for legacy call');
+                await callLogDoc.save();
+                console.log(`📞 Call log (pre-call) saved to database`);
+                
+                // Try to link with contact if exists
+                const contact = await Contact.findOne({ phone: to, campaignId: campaignId });
                 if (contact) {
                     console.log(`✅ Call log linked to contact: ${contact.name} (${contact.phone})`);
                 }
@@ -183,8 +140,6 @@ class TwilioService {
                 console.error('❌ Failed to pre-save call log for legacy call:', logErr);
             }
 
-            console.log(`📞 Making legacy call to ${to} for campaign ${campaignId}`);
-            
             if (!this.client) {
                 throw new Error('Twilio client not initialized');
             }
@@ -212,14 +167,13 @@ class TwilioService {
                 try {
                     callLogDoc.callSid = call.sid;
                     callLogDoc.save();
-                    console.log('✅ Legacy call log updated with real callSid');
                 } catch (updateErr) {
                     console.error('❌ Failed to update legacy call log with real callSid:', updateErr);
                 }
             }
 
             // Log successful call initiation
-            console.log(`📞 Legacy call initiated to ${to}: SID ${call.sid}`);
+            console.log(`📞 Call initiated to ${to}: SID ${call.sid}`);
             
             return {
                 success: true,
@@ -336,8 +290,6 @@ class TwilioService {
      */
     async getCallStatus(callSid) {
         try {
-            console.log('📡 [TWILIO STATUS] Fetching status for callSid:', callSid);
-            
             // Use the existing client instead of creating a new one
             if (!this.client) {
                 console.error('❌ [TWILIO STATUS] Twilio client not initialized');
@@ -346,28 +298,21 @@ class TwilioService {
             
             // Skip real-time fetching for test/fake call SIDs
             if (callSid.startsWith('test_') || callSid.includes('test')) {
-                console.log('🔄 [TWILIO STATUS] Skipping real-time status fetch for test call SID:', callSid);
                 return 'test_call';
             }
             
-            console.log('🔄 [TWILIO STATUS] Making API call to Twilio for callSid:', callSid);
             const call = await this.client.calls(callSid).fetch();
             
-            console.log('✅ [TWILIO STATUS] Successfully fetched call status from Twilio');
-            console.log(`📊 [TWILIO STATUS] Call ${callSid} status: ${call.status}`);
-            console.log(`📊 [TWILIO STATUS] Call direction: ${call.direction}`);
-            console.log(`📊 [TWILIO STATUS] Call duration: ${call.duration || 'N/A'}`);
-            console.log(`📊 [TWILIO STATUS] Call from: ${call.from} to: ${call.to}`);
+            // Only log status changes or errors, not every successful fetch
+            // This reduces log noise significantly
             
             return call.status;
         } catch (err) {
             // Handle specific Twilio errors gracefully
             if (err.message.includes('not found') || err.message.includes('404')) {
-                console.log('🔄 [TWILIO STATUS] Call SID not found in Twilio (may be test/fake SID):', callSid);
                 return 'not_found';
             } else {
                 console.error('❌ [TWILIO STATUS] Failed to fetch call status:', err.message);
-                console.error('❌ [TWILIO STATUS] Error details:', err);
                 return 'unknown';
             }
         }

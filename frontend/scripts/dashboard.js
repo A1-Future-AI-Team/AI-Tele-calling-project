@@ -681,10 +681,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Set up periodic data refresh
         setInterval(() => {
-            if (window.dashboard) {
+            // Only refresh if page is visible and user is active
+            if (window.dashboard && !document.hidden && document.hasFocus()) {
                 window.dashboard.loadDashboardData();
             }
-        }, 30000); // Refresh every 30 seconds
+        }, 120000); // Refresh every 2 minutes instead of 30 seconds
 
         console.log('🎉 Dashboard fully initialized!');
     }, 100); // Small delay to ensure API is loaded

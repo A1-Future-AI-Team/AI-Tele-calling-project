@@ -6,6 +6,9 @@ import CampaignController from '../controllers/campaign.controller.js';
 
 const router = express.Router();
 
+// Create an instance of the controller
+const campaignController = new CampaignController();
+
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -47,14 +50,14 @@ const upload = multer({
 });
 
 // Route definitions
-router.post('/start', upload.single('csv'), CampaignController.startCampaign);
-router.get('/list', CampaignController.getCampaigns);
-router.get('/:id/stats', CampaignController.getCampaignStats);
-router.get('/:id', CampaignController.getCampaignById);
+router.post('/start', upload.single('csv'), campaignController.startCampaign.bind(campaignController));
+router.get('/list', campaignController.getCampaigns.bind(campaignController));
+router.get('/:id/stats', campaignController.getCampaignStats.bind(campaignController));
+router.get('/:id', campaignController.getCampaignById.bind(campaignController));
 
 // Real-time status monitoring routes
-router.get('/:id/live-status', CampaignController.getCampaignLiveStatus);
-router.get('/call-status/:callSid', CampaignController.getCallStatus);
+router.get('/:id/live-status', campaignController.getCampaignLiveStatus.bind(campaignController));
+router.get('/call-status/:callSid', campaignController.getCallStatus.bind(campaignController));
 
 // Error handling middleware for multer errors
 router.use((error, req, res, next) => {
