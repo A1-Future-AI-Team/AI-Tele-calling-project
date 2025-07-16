@@ -49,26 +49,19 @@ class DashboardManager {
 
     setupProfileDropdown() {
         const profileBtn = document.getElementById('profileBtn');
-        const profileDropdown = document.querySelector('.profile-dropdown');
-        const dropdownMenu = document.getElementById('profileDropdown');
-
-        if (profileBtn && profileDropdown) {
-            profileBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                profileDropdown.classList.toggle('active');
+        const dropdown = document.getElementById('profileDropdown');
+        
+        if (profileBtn && dropdown) {
+            profileBtn.addEventListener('click', () => {
+                dropdown.classList.toggle('active');
             });
-
+            
             // Close dropdown when clicking outside
-            document.addEventListener('click', () => {
-                profileDropdown.classList.remove('active');
+            document.addEventListener('click', (e) => {
+                if (!profileBtn.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.remove('active');
+                }
             });
-
-            // Prevent dropdown from closing when clicking inside
-            if (dropdownMenu) {
-                dropdownMenu.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                });
-            }
         }
     }
 
@@ -340,47 +333,33 @@ class DashboardManager {
     }
 
     async fetchRecentActivity() {
-        // TODO: Replace with actual API call
-        // return await window.api.get('/api/dashboard/activity');
-        
-        // Mock data for now
-        return [
-            {
-                phone: '+1 234-567-8901',
-                status: 'success',
-                date: '2024-01-15 14:30',
-                campaign: 'Customer Feedback',
-                transcriptId: 'transcript-001'
-            },
-            {
-                phone: '+1 234-567-8902',
-                status: 'failed',
-                date: '2024-01-15 14:25',
-                campaign: 'Product Survey',
-                transcriptId: null
-            },
-            {
-                phone: '+1 234-567-8903',
-                status: 'success',
-                date: '2024-01-15 14:20',
-                campaign: 'Service Follow-up',
-                transcriptId: 'transcript-002'
-            },
-            {
-                phone: '+1 234-567-8904',
-                status: 'pending',
-                date: '2024-01-15 14:15',
-                campaign: 'Order Confirmation',
-                transcriptId: null
-            },
-            {
-                phone: '+1 234-567-8905',
-                status: 'success',
-                date: '2024-01-15 14:10',
-                campaign: 'Appointment Reminder',
-                transcriptId: 'transcript-003'
+        // Fetch real call logs from backend
+        let logs = [];
+        try {
+            const response = await window.api.get('/api/calllog'); // Adjust endpoint if needed
+            logs = response.data || [];
+        } catch (err) {
+            console.error('Failed to fetch call logs:', err);
+            this.showNotification('Failed to fetch call logs', 'error');
+            return [];
+        }
+
+        // For each log, fetch real-time status from Twilio
+        const logsWithStatus = await Promise.all(logs.map(async (log) => {
+            let realStatus = log.status;
+            if (log.callSid) {
+                try {
+                    const statusResp = await window.api.getCallStatus(log.callSid);
+                    if (statusResp && statusResp.status) {
+                        realStatus = statusResp.status;
+                    }
+                } catch (e) {
+                    console.warn('Could not fetch real-time status for', log.callSid, e);
+                }
             }
-        ];
+            return { ...log, status: realStatus };
+        }));
+        return logsWithStatus;
     }
 
     loadMockData() {
@@ -456,33 +435,49 @@ class DashboardManager {
         const item = document.createElement('div');
         item.className = 'activity-item';
 
-        // Map status to display text and class
+        // Map status to display text, class, and color
         const statusMapping = {
-            'success': { text: 'SUCCESS', class: 'status-success' },
-            'failed': { text: 'FAILED', class: 'status-failed' },
-            'pending': { text: 'PENDING', class: 'status-pending' }
+            'success': { text: 'SUCCESS', color: '#10b981' },
+            'completed': { text: 'COMPLETED', color: '#10b981' },
+            'failed': { text: 'FAILED', color: '#ef4444' },
+            'busy': { text: 'BUSY', color: '#f59e0b' },
+            'pending': { text: 'PENDING', color: '#f59e0b' },
+            'in-progress': { text: 'IN PROGRESS', color: '#f59e0b' }
         };
+        const statusInfo = statusMapping[(activity.status||'').toLowerCase()] || { text: (activity.status || 'UNKNOWN').toUpperCase(), color: '#a0aec0' };
 
-        const statusInfo = statusMapping[activity.status] || { text: 'UNKNOWN', class: 'status-neutral' };
+        // Use populated contact and campaign info if available
+        const contact = activity.contactId || {};
+        const campaign = activity.campaignId || {};
+        const phone = contact.phone || activity.to || 'Unknown';
+        const name = contact.name || 'Unknown';
+        let campaignName = campaign.objective || 'Unknown';
+        if (campaignName.length > 32) campaignName = campaignName.slice(0, 32) + '...';
+        const date = activity.createdAt ? new Date(activity.createdAt).toLocaleString() : 'Unknown';
         
-        const transcriptLink = activity.transcriptId 
-            ? `<a href="/transcripts/${activity.transcriptId}" class="transcript-link">
-                 <i class="fas fa-file-text"></i> View Transcript
+        // Use the new transcript information from the API
+        const hasTranscript = activity.hasTranscript;
+        const transcriptId = activity.transcriptId;
+        const transcriptEntryCount = activity.transcriptEntryCount || 0;
+
+        const transcriptLink = hasTranscript && transcriptId
+            ? `<a href="/transcript-viewer?id=${transcriptId}" class="transcript-link" target="_blank">
+                 <i class="fas fa-file-text"></i> View Transcript (${transcriptEntryCount} messages)
                </a>`
             : '<span class="transcript-link no-transcript">No transcript</span>';
 
         item.innerHTML = `
-            <div class="activity-info">
-                <div class="activity-phone">${activity.phone}</div>
-                <div class="activity-meta">
-                    <span class="campaign-type">${activity.campaign}</span>
-                    <span class="activity-date">${activity.date}</span>
+            <div class="activity-info" style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+                <div style="font-weight: 600; font-size: 1.1rem;">
+                    ${phone} <span style="font-weight: 400; color: #444;">${name}</span>
                 </div>
+                <span class="activity-status-badge" style="font-size: 0.98rem; letter-spacing: 0.02em; padding: 0.18em 0.7em; border-radius: 6px; font-weight: 500; background: ${statusInfo.color}20; color: ${statusInfo.color};">${statusInfo.text}</span>
             </div>
-            <div class="activity-actions">
-                <span class="activity-status ${statusInfo.class}">
-                    ${statusInfo.text}
-                </span>
+            <div class="activity-meta" style="margin-top: 0.3rem; font-size: 1rem; color: #4f46e5; font-weight: 500;">
+                ${campaignName}
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.2rem;">
+                <div style="font-size: 0.98rem; color: #888;">${date}</div>
                 ${transcriptLink}
             </div>
         `;
@@ -679,10 +674,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Set up periodic data refresh
         setInterval(() => {
-            if (window.dashboard) {
+            // Only refresh if page is visible and user is active
+            if (window.dashboard && !document.hidden && document.hasFocus()) {
                 window.dashboard.loadDashboardData();
             }
-        }, 30000); // Refresh every 30 seconds
+        }, 120000); // Refresh every 2 minutes instead of 30 seconds
 
         console.log('🎉 Dashboard fully initialized!');
     }, 100); // Small delay to ensure API is loaded

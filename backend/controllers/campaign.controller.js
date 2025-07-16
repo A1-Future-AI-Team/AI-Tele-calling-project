@@ -4,6 +4,7 @@ import csv from 'csv-parser';
 import Campaign from '../models/campaign.model.js';
 import Contact from '../models/contact.model.js';
 import simulatorService from '../services/simulator.service.js';
+import twilioService from '../services/twilio.service.js';
 
 class CampaignController {
     /**
@@ -51,7 +52,7 @@ class CampaignController {
                             }
                         })
                         .on('end', () => {
-                            console.log(`✅ CSV parsing completed. Found ${contacts.length} contacts.`);
+                            console.log(`✅ CSV parsed: ${contacts.length} contacts found`);
                             resolve();
                         })
                         .on('error', (error) => {
@@ -62,7 +63,6 @@ class CampaignController {
 
                 // Delete the temporary CSV file
                 fs.unlinkSync(csvFilePath);
-                console.log('🗑️ Temporary CSV file deleted');
 
                 // Validate that we have contacts
                 if (contacts.length === 0) {
@@ -82,7 +82,7 @@ class CampaignController {
                 });
 
                 const savedCampaign = await campaign.save();
-                console.log(`📋 Campaign created with ID: ${savedCampaign._id}`);
+                console.log(`📋 Campaign created: ${savedCampaign._id}`);
 
                 // Create contact documents
                 const contactDocuments = contacts.map(contact => ({
@@ -94,12 +94,12 @@ class CampaignController {
 
                 // Bulk insert contacts
                 const savedContacts = await Contact.insertMany(contactDocuments);
-                console.log(`👥 ${savedContacts.length} contacts saved to database`);
+                console.log(`👥 ${savedContacts.length} contacts saved`);
 
-                // Start call simulation in the background
-                console.log(`🎯 Starting call simulation for campaign: ${savedCampaign._id}`);
-                simulatorService.simulateCalls(savedCampaign._id).catch(error => {
-                    console.error('❌ Call simulation error:', error);
+                // Start REAL Twilio calls in the background
+                console.log(`📞 Starting calls for campaign: ${savedCampaign._id}`);
+                makeRealCalls(savedCampaign._id, savedCampaign.language, savedCampaign.objective, savedCampaign.sampleFlow).catch(error => {
+                    console.error('❌ Real call error:', error);
                 });
 
                 // Return success response
@@ -230,6 +230,261 @@ class CampaignController {
             });
         }
     }
+
+    /**
+     * Get real-time campaign status with live call monitoring
+     * GET /api/campaign/:id/live-status
+     */
+    async getCampaignLiveStatus(req, res) {
+        try {
+            console.log('📊 [LIVE STATUS] Request received for campaign:', req.params.id);
+            const { id } = req.params;
+
+            // Check if campaign exists
+            const campaign = await Campaign.findById(id);
+            if (!campaign) {
+                console.log('❌ [LIVE STATUS] Campaign not found:', id);
+                return res.status(404).json({
+                    success: false,
+                    message: 'Campaign not found'
+                });
+            }
+
+            console.log('✅ [LIVE STATUS] Campaign found:', campaign._id, 'Objective:', campaign.objective);
+
+            // Get all contacts for this campaign with their call status
+            const contacts = await Contact.find({ campaignId: id });
+            console.log(`📞 [LIVE STATUS] Found ${contacts.length} contacts for campaign ${id}`);
+            
+            // Get call logs for this campaign
+            const CallLog = (await import('../models/calllog.model.js')).default;
+            const callLogs = await CallLog.find({ campaignId: id }).sort({ createdAt: -1 });
+            console.log(`📋 [LIVE STATUS] Found ${callLogs.length} call logs for campaign ${id}`);
+
+            // Get real-time status for each call
+            const twilioService = (await import('../services/twilio.service.js')).default;
+            console.log('🔄 [LIVE STATUS] Fetching real-time status for contacts...');
+            
+            const contactsWithLiveStatus = await Promise.all(contacts.map(async (contact) => {
+                let liveStatus = contact.status;
+                let callLog = null;
+                
+                // Find the most recent call log for this contact
+                if (contact.callSid) {
+                    callLog = callLogs.find(log => log.callSid === contact.callSid);
+                    console.log(`📞 [LIVE STATUS] Contact ${contact.name} (${contact.phone}) has callSid: ${contact.callSid}`);
+                    
+                    // Get real-time status from Twilio if we have a callSid
+                    try {
+                        const realStatus = await twilioService.getCallStatus(contact.callSid);
+                        liveStatus = realStatus;
+                        console.log(`✅ [LIVE STATUS] Contact ${contact.name} real-time status: ${realStatus} (was: ${contact.status})`);
+                    } catch (error) {
+                        console.log(`⚠️ [LIVE STATUS] Could not fetch real-time status for ${contact.callSid}: ${error.message}`);
+                    }
+                } else {
+                    console.log(`📞 [LIVE STATUS] Contact ${contact.name} (${contact.phone}) - no callSid, using status: ${contact.status}`);
+                }
+
+                return {
+                    _id: contact._id,
+                    name: contact.name,
+                    phone: contact.phone,
+                    status: contact.status,
+                    liveStatus: liveStatus,
+                    callSid: contact.callSid,
+                    callTime: contact.callTime,
+                    lastCallResult: contact.lastCallResult,
+                    errorMessage: contact.errorMessage,
+                    callLog: callLog
+                };
+            }));
+
+            // Calculate real-time statistics
+            const totalContacts = contacts.length;
+            const calledContacts = contacts.filter(c => c.status === 'CALLED').length;
+            const failedContacts = contacts.filter(c => c.status === 'FAILED').length;
+            const pendingContacts = contacts.filter(c => c.status === 'PENDING').length;
+            const callingContacts = contacts.filter(c => c.status === 'CALLING').length;
+
+            // Get live call status counts
+            const liveStats = {
+                completed: contactsWithLiveStatus.filter(c => c.liveStatus === 'completed').length,
+                in_progress: contactsWithLiveStatus.filter(c => c.liveStatus === 'in-progress').length,
+                ringing: contactsWithLiveStatus.filter(c => c.liveStatus === 'ringing').length,
+                failed: contactsWithLiveStatus.filter(c => c.liveStatus === 'failed').length,
+                busy: contactsWithLiveStatus.filter(c => c.liveStatus === 'busy').length,
+                no_answer: contactsWithLiveStatus.filter(c => c.liveStatus === 'no-answer').length
+            };
+
+            console.log('📊 [LIVE STATUS] Campaign statistics:');
+            console.log(`   📞 Total contacts: ${totalContacts}`);
+            console.log(`   ✅ Called: ${calledContacts}`);
+            console.log(`   ❌ Failed: ${failedContacts}`);
+            console.log(`   ⏳ Pending: ${pendingContacts}`);
+            console.log(`   📞 Calling: ${callingContacts}`);
+
+            console.log('📊 [LIVE STATUS] Real-time Twilio status:');
+            console.log(`   ✅ Completed: ${liveStats.completed}`);
+            console.log(`   📞 In Progress: ${liveStats.in_progress}`);
+            console.log(`   🔔 Ringing: ${liveStats.ringing}`);
+            console.log(`   ❌ Failed: ${liveStats.failed}`);
+            console.log(`   📵 Busy: ${liveStats.busy}`);
+            console.log(`   📴 No Answer: ${liveStats.no_answer}`);
+
+            console.log('✅ [LIVE STATUS] Sending response for campaign:', id);
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    campaignId: id,
+                    campaignObjective: campaign.objective,
+                    campaignLanguage: campaign.language,
+                    totalContacts,
+                    calledContacts,
+                    failedContacts,
+                    pendingContacts,
+                    callingContacts,
+                    liveStats,
+                    contacts: contactsWithLiveStatus,
+                    recentCallLogs: callLogs.slice(0, 10) // Last 10 call logs
+                }
+            });
+
+        } catch (error) {
+            console.error('❌ [LIVE STATUS] Get campaign live status error:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to fetch campaign live status',
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Get real-time call status by callSid
+     * GET /api/campaign/call-status/:callSid
+     */
+    async getCallStatus(req, res) {
+        try {
+            console.log('📞 [CALL STATUS] Request received for callSid:', req.params.callSid);
+            const { callSid } = req.params;
+
+            if (!callSid) {
+                console.log('❌ [CALL STATUS] No callSid provided');
+                return res.status(400).json({
+                    success: false,
+                    message: 'CallSid is required'
+                });
+            }
+
+            console.log('🔄 [CALL STATUS] Fetching real-time status from Twilio for:', callSid);
+
+            // Get real-time status from Twilio
+            const twilioService = (await import('../services/twilio.service.js')).default;
+            const status = await twilioService.getCallStatus(callSid);
+            console.log('✅ [CALL STATUS] Twilio status for', callSid, ':', status);
+
+            // Get call log from database
+            const CallLog = (await import('../models/calllog.model.js')).default;
+            const callLog = await CallLog.findOne({ callSid });
+            
+            if (callLog) {
+                console.log('📋 [CALL STATUS] Found call log for', callSid, 'Contact:', callLog.contactId);
+            } else {
+                console.log('⚠️ [CALL STATUS] No call log found for', callSid);
+            }
+
+            console.log('✅ [CALL STATUS] Sending response for callSid:', callSid);
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    callSid,
+                    twilioStatus: status,
+                    databaseLog: callLog
+                }
+            });
+
+        } catch (error) {
+            console.error('❌ [CALL STATUS] Get call status error:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to fetch call status',
+                error: error.message
+            });
+        }
+    }
 }
 
-export default new CampaignController(); 
+/**
+ * Make real Twilio calls to all contacts in a campaign (standalone function)
+ * @param {string} campaignId - Campaign ID
+ * @param {string} language - Campaign language
+ * @param {string} objective - Campaign objective  
+ * @param {string} sampleFlow - Campaign sample flow
+ */
+async function makeRealCalls(campaignId, language, objective, sampleFlow) {
+    try {
+        console.log(`📞 Starting real calls for campaign: ${campaignId}`);
+        
+        // Get all contacts for this campaign
+        const Contact = (await import('../models/contact.model.js')).default;
+        const contacts = await Contact.find({ campaignId: campaignId, status: 'PENDING' });
+        
+        if (contacts.length === 0) {
+            console.log('⚠️ No pending contacts found for campaign:', campaignId);
+            return;
+        }
+        
+        console.log(`📞 Found ${contacts.length} pending contacts for campaign: ${campaignId}`);
+        
+        // Make calls to each contact
+        const twilioService = (await import('../services/twilio.service.js')).default;
+        
+        for (let i = 0; i < contacts.length; i++) {
+            const contact = contacts[i];
+            console.log(`📞 [${i + 1}/${contacts.length}] Calling ${contact.name} (${contact.phone})`);
+            
+            try {
+                const result = await twilioService.makeCallLegacy(contact.phone, campaignId);
+                
+                if (result.success) {
+                    console.log(`✅ [${i + 1}/${contacts.length}] Call initiated successfully to ${contact.phone}`);
+                    
+                    // Update contact status
+                    contact.status = 'CALLING';
+                    contact.callSid = result.callSid;
+                    await contact.save();
+                } else {
+                    console.log(`❌ [${i + 1}/${contacts.length}] Failed to call ${contact.phone}: ${result.error}`);
+                    
+                    // Update contact status
+                    contact.status = 'FAILED';
+                    contact.errorMessage = result.error;
+                    await contact.save();
+                }
+                
+                // Add delay between calls to avoid overwhelming Twilio
+                if (i < contacts.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+                }
+                
+            } catch (error) {
+                console.error(`❌ [${i + 1}/${contacts.length}] Error calling ${contact.phone}:`, error.message);
+                
+                // Update contact status
+                contact.status = 'FAILED';
+                contact.errorMessage = error.message;
+                await contact.save();
+            }
+        }
+        
+        console.log(`✅ Completed real calls for campaign: ${campaignId}`);
+        
+    } catch (error) {
+        console.error('❌ Error in makeRealCalls:', error);
+    }
+}
+
+export default CampaignController;

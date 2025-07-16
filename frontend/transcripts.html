@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcripts - TeleCall AI</title>
+    <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0idXJsKCNncmFkaWVudDApIi8+CjxwYXRoIGQ9Ik0xMCA5QzEwIDcuODk1NDMgMTAuODk1NCA3IDEyIDdIMjBDMjEuMTA0NiA3IDIyIDcuODk1NCAyMiA5VjEyQzIyIDEzLjEwNDYgMjEuMTA0NiAxNCAyMCAzSDExQzEwLjg5NTQgMTQgMTAgMTMuMTA0NiAxMCAxMlY5WiIgZmlsbD0id2hpdGUiLz4KPGVmcz4KPGxpbmVhckdyYWRpZW50IGlkPSJncmFkaWVudDAiIHgxPSIwIiB5MT0iMCIgeDI9IjMyIiB5Mj0iMzIiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iIzY2N0VFQSIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiM3NjRCQTIiLz4KPC9saW5lYXJHcmFkaWVudD4KPC9kZWZzPgo8L3N2Zz4K">
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/dashboard.css">
+    <link rel="stylesheet" href="styles/performance.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Transcripts Page Specific Styles */
+        .transcripts-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .transcripts-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: #0a0a0a;
+            margin-bottom: 0.5rem;
+        }
+        
+        .transcripts-subtitle {
+            font-size: 1.1rem;
+            color: #5a6c7d;
+            font-weight: 500;
+        }
+        
+        .transcripts-filters {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .filter-select {
+            padding: 0.75rem 1rem;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.7);
+            color: #0a0a0a;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            min-width: 150px;
+            max-width: 300px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        
+        .filter-select:focus {
+            outline: none;
+            border-color: #00ff88;
+            box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.1);
+        }
+        
+        .filter-select option {
+            padding: 0.5rem;
+            font-size: 0.9rem;
+            max-width: 300px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        
+        .transcripts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .transcript-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .transcript-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: radial-gradient(circle, #666666 1px, transparent 1px);
+            background-size: 20px 20px;
+            opacity: 0.1;
+            pointer-events: none;
+            z-index: 0;
+            border-radius: 20px;
+        }
+        
+        .transcript-card > * {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .transcript-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+        
+        .transcript-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .transcript-icon {
+            width: 48px;
+            height: 48px;
+            background: #00ff88;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #0a0a0a;
+            font-size: 1.2rem;
+        }
+        
+        .transcript-info {
+            flex: 1;
+        }
+        
+        .transcript-contact {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #0a0a0a;
+            margin-bottom: 0.25rem;
+        }
+        
+        .transcript-phone {
+            font-size: 0.9rem;
+            color: #5a6c7d;
+            font-weight: 500;
+        }
+        
+        .transcript-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .transcript-tag {
+            background: rgba(0, 255, 136, 0.1);
+            color: #0a0a0a;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            max-width: 120px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            overflow: hidden;
+            display: inline-block;
+        }
+        
+        .transcript-preview {
+            color: #5a6c7d;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .transcript-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+        
+        .view-transcript-btn {
+            background: #00ff88;
+            color: #0a0a0a;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .view-transcript-btn:hover {
+            background: #00e676;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 255, 136, 0.3);
+        }
+        
+        .download-transcript-btn {
+            background: rgba(0, 255, 136, 0.1);
+            color: #0a0a0a;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .download-transcript-btn:hover {
+            background: rgba(0, 255, 136, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .empty-icon {
+            width: 80px;
+            height: 80px;
+            background: rgba(0, 255, 136, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            color: #00ff88;
+            font-size: 2rem;
+        }
+        
+        .empty-state h3 {
+            color: #0a0a0a;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+            font-size: 1.5rem;
+        }
+        
+        .empty-state p {
+            color: #5a6c7d;
+            line-height: 1.6;
+            font-weight: 500;
+            margin-bottom: 2rem;
+        }
+        
+        .loading-spinner {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 3rem;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(0, 255, 136, 0.2);
+            border-top: 3px solid #00ff88;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            .transcripts-title {
+                font-size: 2rem;
+            }
+            
+            .transcripts-filters {
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .filter-select {
+                width: 100%;
+                max-width: 280px;
+                text-align: center;
+            }
+            
+            .transcripts-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            
+            .transcript-card {
+                padding: 1rem;
+            }
+            
+            .transcript-actions {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Top Navbar -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <!-- Brand Logo -->
+                <div class="brand-logo">
+                    <div class="logo-icon">
+                        <i class="fas fa-phone-alt"></i>
+                    </div>
+                    <span class="brand-name">TeleCall AI</span>
+                </div>
+                
+                <!-- Navigation Menu -->
+                <nav class="nav-menu">
+                    <a href="/dashboard" class="nav-link">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a href="/call-logs" class="nav-link">
+                        <i class="fas fa-list"></i>
+                        <span>Call Logs</span>
+                    </a>
+                    <a href="/transcripts" class="nav-link active">
+                        <i class="fas fa-file-text"></i>
+                        <span>Transcripts</span>
+                    </a>
+                </nav>
+                
+                <!-- Profile Section -->
+                <div class="profile-section">
+                    <div class="profile-dropdown">
+                        <button class="profile-btn" id="profileBtn">
+                            <div class="profile-avatar">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <span class="profile-name">Admin</span>
+                            <i class="fas fa-chevron-down profile-arrow"></i>
+                        </button>
+                        
+                        <div class="dropdown-menu" id="profileDropdown">
+                            <button class="dropdown-item logout-item" id="logoutBtn">
+                                <i class="fas fa-sign-out-alt"></i>
+                                <span>Logout</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <main class="dashboard-main">
+            <!-- Transcripts Header -->
+            <section class="transcripts-header">
+                <h1 class="transcripts-title">Call Transcripts</h1>
+                <p class="transcripts-subtitle">Review and analyze your AI-powered call conversations</p>
+            </section>
+            
+            <!-- Filters -->
+            <section class="transcripts-filters">
+                <select id="campaignFilter" class="filter-select">
+                    <option value="">All Campaigns</option>
+                </select>
+                <select id="statusFilter" class="filter-select">
+                    <option value="">All Languages</option>
+                    <option value="English">English</option>
+                    <option value="Hindi">Hindi</option>
+                    <option value="Bengali">Bengali</option>
+                </select>
+                <select id="dateFilter" class="filter-select">
+                    <option value="">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                </select>
+            </section>
+            
+            <!-- Loading State -->
+            <div id="loadingState" class="loading-spinner">
+                <div class="spinner"></div>
+            </div>
+            
+            <!-- Empty State -->
+            <div id="emptyState" class="empty-state" style="display: none;">
+                <div class="empty-icon">
+                    <i class="fas fa-file-text"></i>
+                </div>
+                <h3>No Transcripts Found</h3>
+                <p>Start making calls to generate transcripts that you can review and analyze.</p>
+                <a href="/dashboard.html" class="view-transcript-btn">
+                    <i class="fas fa-rocket"></i>
+                    Start a Campaign
+                </a>
+            </div>
+            
+            <!-- Transcripts Grid -->
+            <section id="transcriptsGrid" class="transcripts-grid" style="display: none;">
+                <!-- Transcript cards will be populated here -->
+            </section>
+        </main>
+    </div>
+    
+    <script src="scripts/api.js"></script>
+    <script src="scripts/transcripts.js"></script>
+    <script src="scripts/performance.js"></script>
+</body>
+</html> 

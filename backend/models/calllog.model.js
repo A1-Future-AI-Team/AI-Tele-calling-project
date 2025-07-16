@@ -4,24 +4,24 @@ const callLogSchema = new mongoose.Schema({
     contactId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Contact',
-        required: true
+
     },
     campaignId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Campaign',
-        required: true
+
     },
     language: {
         type: String,
-        required: true
+
     },
     status: {
         type: String,
-        required: true
+
     },
     startTime: {
         type: Date,
-        required: true
+
     },
     endTime: {
         type: Date
@@ -31,7 +31,23 @@ const callLogSchema = new mongoose.Schema({
     },
     aiResponseLog: [{
         type: mongoose.Schema.Types.Mixed
-    }]
+    }],
+    callSid: {
+        type: String,
+        index: true
+    },
+    to: {
+        type: String
+    },
+    from: {
+        type: String
+    },
+    initialGreetingText: {
+        type: String
+    },
+    initialGreetingAudioUrl: {
+        type: String
+    }
 }, {
     timestamps: true
 });

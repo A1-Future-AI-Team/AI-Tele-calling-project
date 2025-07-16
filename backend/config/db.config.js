@@ -6,7 +6,7 @@ class Database {
     }
 
     async connect() {
-        try {
+    try {
             const mongoURI = process.env.MONGO_URI || 'mongodb://localhost:27017/fullstack-app';
 
             this.connection = await mongoose.connect(mongoURI);
@@ -22,10 +22,10 @@ class Database {
                 console.error('📦 MongoDB Error:', err);
             });
 
-        } catch (error) {
+    } catch (error) {
             console.error('📦 Database connection failed:', error.message);
-            process.exit(1);
-        }
+        process.exit(1);
+    }
     }
 
     async disconnect() {

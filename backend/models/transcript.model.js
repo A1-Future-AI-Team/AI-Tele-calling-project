@@ -4,7 +4,7 @@ const transcriptSchema = new mongoose.Schema({
     contactId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Contact',
-        required: true
+
     },
     campaignId: {
         type: mongoose.Schema.Types.ObjectId,

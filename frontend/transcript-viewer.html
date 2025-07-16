@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcript Viewer - TeleCall AI</title>
+    <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0idXJsKCNncmFkaWVudDApIi8+CjxwYXRoIGQ9Ik0xMCA5QzEwIDcuODk1NDMgMTAuODk1NCA3IDEyIDdIMjBDMjEuMTA0NiA3IDIyIDcuODk1NCAyMiA5VjEyQzIyIDEzLjEwNDYgMjEuMTA0NiAxNCAyMCAzSDExQzEwLjg5NTQgMTQgMTAgMTMuMTA0NiAxMCAxMlY5WiIgZmlsbD0id2hpdGUiLz4KPGVmcz4KPGxpbmVhckdyYWRpZW50IGlkPSJncmFkaWVudDAiIHgxPSIwIiB5MT0iMCIgeDI9IjMyIiB5Mj0iMzIiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iIzY2N0VFQSIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiM3NjRCQTIiLz4KPC9saW5lYXJHcmFkaWVudD4KPC9kZWZzPgo8L3N2Zz4K">
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/dashboard.css">
+    <link rel="stylesheet" href="styles/performance.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .transcript-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.1);
+        }
+        
+        .transcript-header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #f1f5f9;
+        }
+        
+        .transcript-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+        
+        .transcript-meta {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            font-size: 0.9rem;
+            color: #64748b;
+        }
+        
+        .transcript-entries {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .transcript-entry {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            background: #f8fafc;
+            border-left: 4px solid #667eea;
+        }
+        
+        .transcript-entry.user {
+            background: #f0f9ff;
+            border-left-color: #0ea5e9;
+        }
+        
+        .transcript-entry.ai {
+            background: #f0fdf4;
+            border-left-color: #10b981;
+        }
+        
+        .entry-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: white;
+            flex-shrink: 0;
+        }
+        
+        .entry-avatar.user {
+            background: #0ea5e9;
+        }
+        
+        .entry-avatar.ai {
+            background: #10b981;
+        }
+        
+        .entry-content {
+            flex: 1;
+        }
+        
+        .entry-sender {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .entry-text {
+            color: #334155;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        
+        .entry-time {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            margin-top: 0.5rem;
+        }
+        
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: #00ff88;
+            color: #0a0a0a;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-bottom: 1rem;
+        }
+        
+        .back-button:hover {
+            background: #00e676;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 255, 136, 0.3);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }
+        
+        .error {
+            text-align: center;
+            padding: 3rem;
+            color: #ef4444;
+        }
+        
+        @media (max-width: 768px) {
+            .transcript-container {
+                margin: 1rem;
+                padding: 1rem;
+            }
+            
+            .transcript-meta {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .transcript-entry {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Top Navbar -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <!-- Brand Logo -->
+                <div class="brand-logo">
+                    <div class="logo-icon">
+                        <i class="fas fa-phone-alt"></i>
+                    </div>
+                    <span class="brand-name">TeleCall AI</span>
+                </div>
+                
+                <!-- Navigation Menu -->
+                <nav class="nav-menu">
+                    <a href="/dashboard" class="nav-link">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a href="/call-logs" class="nav-link">
+                        <i class="fas fa-list"></i>
+                        <span>Call Logs</span>
+                    </a>
+                    <a href="/transcripts" class="nav-link active">
+                        <i class="fas fa-file-text"></i>
+                        <span>Transcripts</span>
+                    </a>
+                </nav>
+                
+                <!-- Profile Section -->
+                <div class="profile-section">
+                    <div class="profile-dropdown">
+                        <button class="profile-btn" id="profileBtn">
+                            <div class="profile-avatar">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <span class="profile-name">Admin</span>
+                            <i class="fas fa-chevron-down profile-arrow"></i>
+                        </button>
+                        
+                        <div class="dropdown-menu" id="profileDropdown">
+                            <button class="dropdown-item logout-item" id="logoutBtn">
+                                <i class="fas fa-sign-out-alt"></i>
+                                <span>Logout</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <main class="dashboard-main">
+            <div class="transcript-container">
+                <a href="/transcripts" class="back-button">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Transcripts
+                </a>
+            
+            <div id="loading" class="loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                Loading transcript...
+            </div>
+            
+            <div id="error" class="error" style="display: none;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Failed to load transcript</p>
+            </div>
+            
+            <div id="transcript-content" style="display: none;">
+                <div class="transcript-header">
+                    <h1 class="transcript-title">Call Transcript</h1>
+                    <div class="transcript-meta">
+                        <span id="contact-info">Contact: Loading...</span>
+                        <span id="campaign-info">Campaign: Loading...</span>
+                        <span id="call-status">Status: Loading...</span>
+                        <span id="call-duration">Duration: Loading...</span>
+                    </div>
+                </div>
+                
+                <div id="transcript-entries" class="transcript-entries">
+                    <!-- Transcript entries will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="scripts/transcript-viewer.js"></script>
+    <script src="scripts/performance.js"></script>
+</body>
+</html> 
