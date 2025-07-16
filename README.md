@@ -1,218 +1,147 @@
-# AI Telecalling Project
+# AI Telecalling Application
 
-Complete AI-powered telecalling web application with Twilio integration, Reverie TTS/STT, and Groq LLM.
+A complete AI-powered telecalling web application with Twilio integration, Reverie TTS/STT, and Groq LLM.
 
-## Quick Start
+## 🚀 Quick Start
 
-### 1. Install Dependencies
+### Local Development
 ```bash
-# Install backend dependencies
-cd backend
-npm install
+# Install dependencies
+npm run install-backend
 
-# Return to project root
-cd ..
-```
-
-### 2. Environment Configuration
-Create a `.env` file in the `backend` directory:
-```bash
-# MongoDB
-MONGO_URI=mongodb://localhost:27017/ai-telecalling
-
-# Twilio
-TWILIO_ACCOUNT_SID=your_account_sid
-TWILIO_AUTH_TOKEN=your_auth_token
-TWILIO_PHONE_NUMBER=+12202443519
-
-# Reverie TTS/STT
-REVERIE_API_KEY=87ccfe93b075e81ac7b39daa5f4b48ee1980693a
-REVERIE_APP_ID=dev.marutawa
-
-# Groq AI
-GROQ_API_KEY=your_groq_api_key
-
-# Base URL for webhooks
-BASE_URL=https://your-webhook-url.com
-```
-
-### 3. Start the Application
-
-#### Method 1: Using npm scripts (Recommended)
-```bash
-# Start backend server
+# Start the application
 npm start
+```
 
-# Or for development with auto-restart
+### Docker Deployment
+```bash
+# Using Docker Compose
+docker-compose up -d
+
+# Or use the deployment script
+./docker-deploy.sh  # Linux/Mac
+docker-deploy.bat   # Windows
+```
+
+## 🌐 Hugging Face Spaces Deployment
+
+This application is configured for deployment on Hugging Face Spaces.
+
+### Environment Variables Setup
+
+In your Hugging Face Space, go to **Settings** → **Repository secrets** and add the following environment variables:
+
+#### Required Environment Variables:
+
+| Variable Name | Description | Example Value |
+|---------------|-------------|---------------|
+| `TWILIO_ACCOUNT_SID` | Your Twilio Account SID | `AC3e9e1c30c7c3f0f03f95087a8844c1b8` |
+| `TWILIO_AUTH_TOKEN` | Your Twilio Auth Token | `your_auth_token_here` |
+| `TWILIO_PHONE_NUMBER` | Your Twilio Phone Number | `+12202443519` |
+| `REVERIE_API_KEY` | Reverie TTS/STT API Key | `87ccfe93b075e81ac7b39daa5f4b48ee1980693a` |
+| `REVERIE_APP_ID` | Reverie Application ID | `dev.marutawa` |
+| `GROQ_API_KEY` | Your Groq API Key | `your_groq_api_key_here` |
+| `BASE_URL` | Your Hugging Face Space URL | `https://your-username-ai-telecalling.hf.space` |
+| `SESSION_SECRET` | Session Secret Key | `your_random_session_secret` |
+| `MONGODB_URI` | MongoDB Connection String | `mongodb+srv://username:password@cluster.mongodb.net/ai_telecalling` |
+
+#### Optional Environment Variables:
+
+| Variable Name | Description | Default Value |
+|---------------|-------------|---------------|
+| `NODE_ENV` | Environment mode | `production` |
+| `PORT` | Application port | `3000` |
+| `VERBOSE_LOGS` | Enable verbose logging | `false` |
+
+### How to Add Environment Variables:
+
+1. **Go to your Hugging Face Space**
+2. **Click on "Settings"** (gear icon)
+3. **Navigate to "Repository secrets"**
+4. **Click "New secret"**
+5. **Add each variable** with its corresponding value
+6. **Save the secret**
+
+### Important Notes for Hugging Face Spaces:
+
+1. **MongoDB**: You'll need to use a cloud MongoDB service (MongoDB Atlas) since Hugging Face Spaces doesn't support running MongoDB containers.
+
+2. **BASE_URL**: This should be your Hugging Face Space URL, which will be in the format: `https://your-username-ai-telecalling.hf.space`
+
+3. **Twilio Webhooks**: Update your Twilio webhook URLs to point to your Hugging Face Space:
+   - Voice Response: `https://your-username-ai-telecalling.hf.space/api/twilio/voice-response`
+   - Status Callback: `https://your-username-ai-telecalling.hf.space/api/twilio/call-status`
+
+4. **File Storage**: Hugging Face Spaces has limited file storage, so audio files and uploads may need to be stored externally.
+
+## 📋 Features
+
+- **AI-Powered Conversations**: Uses Groq LLM for intelligent responses
+- **Multi-language Support**: Hindi, English, Bengali with Reverie TTS/STT
+- **Twilio Integration**: Complete telecalling functionality
+- **Campaign Management**: Create and manage calling campaigns
+- **Call Logs & Transcripts**: Track all conversations
+- **Modern UI**: Corporate Memphis design with responsive layout
+
+## 🛠️ Tech Stack
+
+- **Backend**: Node.js + Express + MongoDB
+- **Frontend**: Vanilla HTML/CSS/JavaScript
+- **AI**: Groq LLM (llama3-8b-8192)
+- **TTS/STT**: Reverie API
+- **Telecalling**: Twilio
+- **Deployment**: Docker, Hugging Face Spaces
+
+## 📞 API Endpoints
+
+- `GET /` - Main application
+- `GET /health` - Health check
+- `POST /api/auth/*` - Authentication
+- `POST /api/campaign/*` - Campaign management
+- `POST /api/twilio/*` - Twilio webhooks
+- `GET /api/transcript/*` - Transcript management
+
+## 🔧 Development
+
+```bash
+# Install dependencies
+npm run install-backend
+
+# Start development server
 npm run dev
-```
 
-#### Method 2: Direct command
-```bash
-# Navigate to backend directory
-cd backend
-
-# Start the server
-node app.js
-```
-
-#### Method 3: Start frontend separately (optional)
-```bash
-# Start frontend on port 8080
+# Start frontend (optional)
 npm run frontend
 ```
 
-### 4. Access the Application
-- **Web Interface**: `http://localhost:3000`
-- **API Endpoints**: `http://localhost:3000/api/`
+## 📦 Docker
 
-## Features
-
-### ✅ Complete AI Conversation Flow
-1. **Campaign Creation**: Upload CSV contacts via web dashboard
-2. **Real Twilio Calls**: Makes actual phone calls to all contacts
-3. **AI-Generated Opening**: Uses campaign context to create personalized opening messages
-4. **Multi-Language Support**: 11+ Indian languages with native TTS
-5. **Dynamic Conversations**: STT → AI → TTS loop for natural conversations
-6. **Call Recording**: Full conversation logging and transcription
-
-### 🌍 Supported Languages
-- English
-- Hindi
-- Bengali
-- Tamil
-- Telugu
-- Malayalam
-- Kannada
-- Gujarati
-- Punjabi
-- Marathi
-- Urdu
-
-### 🔧 Technical Stack
-- **Backend**: Node.js + Express + MongoDB
-- **Frontend**: Vanilla HTML/CSS/JS with Corporate Memphis design
-- **TTS**: Reverie TTS API (WAV format)
-- **STT**: Reverie STT API
-- **AI**: Groq LLM (llama3-8b-8192)
-- **Telecalling**: Twilio API
-
-## API Endpoints
-
-### Campaign Management
-- `POST /api/campaign/start` - Create new campaign with CSV upload
-- `GET /api/campaign/list` - List all campaigns
-- `GET /api/campaign/:id` - Get campaign details
-- `GET /api/campaign/:id/stats` - Get campaign statistics
-
-### Twilio Webhooks
-- `POST /api/twilio/voice-response` - Main voice response handler
-- `POST /api/twilio/transcribe` - Audio transcription handler
-- `POST /api/twilio/call-status` - Call status updates
-
-### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - User login
-
-## Usage
-
-### 1. Create a Campaign
-1. Access the web dashboard at `http://localhost:3000`
-2. Upload a CSV file with columns: `name`, `phone`
-3. Select language (Hindi, English, etc.)
-4. Enter calling objective (e.g., "Ask users for feedback on their recent purchase")
-5. Optional: Add example call flow
-6. Click "Start Campaign"
-
-### 2. Campaign Execution
-- System automatically makes real Twilio calls to all contacts
-- Each call uses AI-generated opening message in selected language
-- Users can speak back, triggering AI conversations
-- Full conversation flow: TTS → User Speech → STT → AI → TTS → Loop
-
-### 3. Monitor Results
-- View call logs and transcriptions in the dashboard
-- Track campaign performance and success rates
-- Access individual conversation transcripts
-
-## Troubleshooting
-
-### Common Issues
-
-1. **"Cannot find module" error**
-   ```bash
-   # Make sure you're in the correct directory
-   cd backend
-   npm install
-   node app.js
-   ```
-
-2. **"this.mapLanguageToSpeaker is not a function"**
-   - Fixed: Controller methods are now properly bound
-
-3. **Language mismatch**
-   - Fixed: Dashboard now uses full language names (e.g., "Hindi" instead of "hi")
-
-4. **MongoDB connection error**
-   - Ensure MongoDB is running
-   - Check MONGO_URI in .env file
-
-5. **Twilio webhook errors**
-   - Verify webhook URLs are accessible
-   - Check Twilio credentials in .env file
-
-### Testing
-
-#### Test AI Response
 ```bash
-cd backend
-node testLLM.js
+# Build and run with Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
 ```
 
-#### Test TTS Generation
-```bash
-cd backend
-node testCalling.js
-```
+## 🔒 Security
 
-#### Test Simple Call
-```bash
-cd backend
-node testSimpleCall.js
-```
+- Environment variables for sensitive data
+- CORS configuration
+- Helmet.js for security headers
+- Input validation and sanitization
 
-## Environment Variables
+## 📊 Monitoring
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `MONGO_URI` | MongoDB connection string | `mongodb://localhost:27017/ai-telecalling` |
-| `TWILIO_ACCOUNT_SID` | Twilio Account SID | `AC3e9e1c30c7c3f0f03f95087a8844c1b8` |
-| `TWILIO_AUTH_TOKEN` | Twilio Auth Token | `your_auth_token` |
-| `TWILIO_PHONE_NUMBER` | Twilio Phone Number | `+12202443519` |
-| `REVERIE_API_KEY` | Reverie API Key | `87ccfe93b075e81ac7b39daa5f4b48ee1980693a` |
-| `REVERIE_APP_ID` | Reverie App ID | `dev.marutawa` |
-| `GROQ_API_KEY` | Groq API Key | `your_groq_api_key` |
-| `BASE_URL` | Webhook Base URL | `https://your-domain.com` |
+- Health check endpoint: `/health`
+- Application logs
+- Call status tracking
+- Error monitoring
 
-## Architecture
-
-```
-├── backend/
-│   ├── app.js              # Main Express application
-│   ├── controllers/        # Route handlers
-│   ├── models/            # MongoDB models
-│   ├── routes/            # API routes
-│   ├── services/          # Business logic
-│   └── public/audio/      # Generated TTS files
-├── frontend/
-│   ├── index.html         # Login page
-│   ├── dashboard.html     # Main dashboard
-│   ├── scripts/           # Frontend JavaScript
-│   └── styles/            # CSS files
-└── README.md
-```
-
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -220,6 +149,14 @@ node testSimpleCall.js
 4. Test thoroughly
 5. Submit a pull request
 
-## License
+## 📄 License
 
 This project is licensed under the ISC License.
+
+## 📞 Support
+
+For issues and questions:
+- Check the documentation
+- Review logs and error messages
+- Test with the health endpoint
+- Verify environment variables are set correctly
