@@ -117,6 +117,27 @@ const transcriptController = {
       console.error('Error fetching contact transcripts:', error);
       res.status(500).json({ error: 'Failed to fetch contact transcripts' });
     }
+  },
+
+  /**
+   * Debug endpoint to get all transcripts
+   */
+  async getAllTranscripts(req, res) {
+    try {
+      const transcripts = await Transcript.find()
+        .populate('contactId')
+        .populate('campaignId')
+        .sort({ createdAt: -1 });
+      
+      res.json({
+        success: true,
+        count: transcripts.length,
+        data: transcripts
+      });
+    } catch (error) {
+      console.error('Error fetching all transcripts:', error);
+      res.status(500).json({ error: 'Failed to fetch all transcripts' });
+    }
   }
 };
 

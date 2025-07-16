@@ -113,7 +113,6 @@ npm run frontend
 ### Authentication
 - `POST /api/auth/register` - Register new user
 - `POST /api/auth/login` - User login
-- `GET /api/auth/profile` - Get user profile
 
 ## Usage
 

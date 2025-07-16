@@ -15,4 +15,7 @@ router.get('/campaign/:campaignId', transcriptController.getTranscriptsByCampaig
 // Get all transcripts for a contact
 router.get('/contact/:contactId', transcriptController.getTranscriptsByContact);
 
+// Debug endpoint to get all transcripts
+router.get('/debug/all', transcriptController.getAllTranscripts);
+
 export default router; 

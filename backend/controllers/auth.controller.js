@@ -90,33 +90,7 @@ class AuthController {
         }
     }
 
-    // Get user profile
-    async getProfile(req, res) {
-        try {
-            const { userId } = req.params;
 
-            const user = await User.findById(userId);
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'User not found'
-                });
-            }
-
-            res.status(200).json({
-                success: true,
-                data: user
-            });
-
-        } catch (error) {
-            console.error('Get profile error:', error);
-            res.status(500).json({
-                success: false,
-                message: 'Failed to get user profile',
-                error: error.message
-            });
-        }
-    }
 }
 
 export default new AuthController(); 

@@ -82,7 +82,7 @@ function createActivityItem(activity) {
     const transcriptEntryCount = activity.transcriptEntryCount || 0;
     
     const transcriptLink = hasTranscript && transcriptId
-        ? `<a href="/transcript-viewer.html?id=${transcriptId}" class="transcript-link" style="color:#4f46e5;font-weight:500;text-decoration:none;margin-left:1.1em;" target="_blank"><i class="fas fa-file-text"></i> View Transcript (${transcriptEntryCount} messages)</a>`
+        ? `<a href="/transcript-viewer?id=${transcriptId}" class="transcript-link" style="color:#4f46e5;font-weight:500;text-decoration:none;margin-left:1.1em;" ><i class="fas fa-file-text"></i> View Transcript (${transcriptEntryCount} messages)</a>`
         : '<span class="transcript-link no-transcript" style="color:#a0aec0;margin-left:1.1em;">No transcript</span>';
 
     item.innerHTML = `
@@ -146,7 +146,7 @@ function createMobileCallLogItem(activity) {
     const transcriptEntryCount = activity.transcriptEntryCount || 0;
     
     const transcript = hasTranscript && transcriptId
-        ? `<a href="/transcript-viewer.html?id=${transcriptId}" class="transcript-link" style="color:#4f46e5;font-weight:500;text-decoration:none;" target="_blank"><i class="fas fa-file-text"></i> View Transcript (${transcriptEntryCount} messages)</a>`
+        ? `<a href="/transcript-viewer?id=${transcriptId}" class="transcript-link" style="color:#4f46e5;font-weight:500;text-decoration:none;"><i class="fas fa-file-text"></i> View Transcript (${transcriptEntryCount} messages)</a>`
         : '<span class="call-log-transcript">No transcript</span>';
 
     item.innerHTML = `
@@ -185,10 +185,43 @@ function renderCallLogs(logs) {
 }
 
 async function initCallLogsPage() {
-    allLogs = await fetchCallLogs();
-    campaigns = getUniqueCampaigns(allLogs);
-    renderCampaignSelector();
-    renderCallLogs(allLogs);
+    try {
+        // Show loading state
+        const loadingState = document.getElementById('loadingState');
+        const activityContent = document.getElementById('activityContent');
+        
+        if (loadingState) loadingState.style.display = 'flex';
+        if (activityContent) activityContent.style.display = 'none';
+        
+        // Fetch data
+        allLogs = await fetchCallLogs();
+        campaigns = getUniqueCampaigns(allLogs);
+        
+        // Hide loading and show content
+        if (loadingState) loadingState.style.display = 'none';
+        if (activityContent) activityContent.style.display = 'block';
+        
+        renderCampaignSelector();
+        renderCallLogs(allLogs);
+    } catch (error) {
+        console.error('Error loading call logs:', error);
+        
+        // Hide loading and show error
+        const loadingState = document.getElementById('loadingState');
+        const activityContent = document.getElementById('activityContent');
+        
+        if (loadingState) loadingState.style.display = 'none';
+        if (activityContent) {
+            activityContent.style.display = 'block';
+            activityContent.innerHTML = `
+                <div class="empty-state" style="text-align: center; padding: 2rem;">
+                    <h3 style="color: #ef4444;">Error Loading Call Logs</h3>
+                    <p style="color: #64748b;">Failed to load call logs. Please try refreshing the page.</p>
+                    <button onclick="location.reload()" style="margin-top: 1rem; padding: 0.75rem 1.5rem; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">Retry</button>
+                </div>
+            `;
+        }
+    }
 }
 
 window.addEventListener('DOMContentLoaded', initCallLogsPage); 

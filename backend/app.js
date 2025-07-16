@@ -117,9 +117,15 @@ class App {
             res.sendFile(path.join(__dirname, '..', 'frontend', 'dashboard.html'));
         });
         
-        this.app.get('/logs', (req, res) => {
-            res.sendFile(path.join(__dirname, '..', 'frontend', 'logs.html'));
+        this.app.get('/call-logs', (req, res) => {
+            res.sendFile(path.join(__dirname, '..', 'frontend', 'call-logs.html'));
         });
+        
+        this.app.get('/transcripts', (req, res) => {
+            res.sendFile(path.join(__dirname, '..', 'frontend', 'transcripts.html'));
+        });
+        
+
         
         this.app.get('/transcript-viewer', (req, res) => {
             res.sendFile(path.join(__dirname, '..', 'frontend', 'transcript-viewer.html'));

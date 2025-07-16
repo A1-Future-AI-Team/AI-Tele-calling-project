@@ -1,0 +1,220 @@
+/* Performance Optimizations - Smooth Animations & Scrolling */
+
+/* Hardware Acceleration & Smooth Scrolling */
+html {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scroll-padding-top: 80px; /* Account for fixed header */
+}
+
+body {
+    -webkit-overflow-scrolling: touch;
+    will-change: scroll-position;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Optimize all elements for smooth animations */
+* {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Smooth transitions for all interactive elements */
+.btn,
+.nav-link,
+.profile-btn,
+.stat-card,
+.feature-block,
+.activity-item,
+.file-upload-area,
+.start-campaign-btn,
+.auth-btn,
+.social-btn,
+.form-control,
+.form-select,
+.form-textarea,
+.dropdown-menu,
+.pattern-block {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    will-change: transform, opacity, background-color, box-shadow, border-color;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+
+/* Optimize hover effects */
+.btn:hover,
+.nav-link:hover,
+.profile-btn:hover,
+.stat-card:hover,
+.feature-block:hover,
+.activity-item:hover,
+.file-upload-area:hover,
+.start-campaign-btn:hover,
+.auth-btn:hover:not(:disabled),
+.social-btn:hover {
+    transform: translateY(-2px) translateZ(0);
+    will-change: transform, box-shadow;
+}
+
+/* Optimize focus states */
+.form-control:focus,
+.form-select:focus,
+.form-textarea:focus {
+    transform: translateZ(0);
+    will-change: border-color, box-shadow;
+}
+
+/* Optimize animations */
+.animate-float,
+.animate-pulse,
+.animate-fade-in,
+.animate-slide-in-right,
+.animate-slide-in-left,
+.animate-spin {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+
+/* Optimize scrolling containers */
+.dashboard-container,
+.auth-container,
+.activity-list,
+.scrollable-content {
+    -webkit-overflow-scrolling: touch;
+    will-change: scroll-position;
+    transform: translateZ(0);
+}
+
+/* Optimize backdrop filters */
+.dashboard-header,
+.stat-card,
+.campaign-card,
+.activity-card,
+.feature-block {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    will-change: backdrop-filter;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    
+    .animate-float,
+    .animate-pulse,
+    .animate-fade-in,
+    .animate-slide-in-right,
+    .animate-slide-in-left,
+    .animate-spin {
+        animation: none !important;
+    }
+}
+
+/* Optimize for high DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .logo-icon,
+    .stat-icon,
+    .feature-icon,
+    .pattern-block {
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: crisp-edges;
+    }
+}
+
+/* Optimize for mobile devices */
+@media (max-width: 768px) {
+    body {
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+    }
+    
+    /* Reduce animation complexity on mobile */
+    .animate-float {
+        animation-duration: 4s;
+    }
+    
+    .animate-pulse {
+        animation-duration: 3s;
+    }
+}
+
+/* Optimize for touch devices */
+@media (hover: none) and (pointer: coarse) {
+    /* Remove hover effects on touch devices */
+    .btn:hover,
+    .nav-link:hover,
+    .profile-btn:hover,
+    .stat-card:hover,
+    .feature-block:hover,
+    .activity-item:hover,
+    .file-upload-area:hover,
+    .start-campaign-btn:hover,
+    .auth-btn:hover:not(:disabled),
+    .social-btn:hover {
+        transform: none;
+    }
+    
+    /* Add active states for touch */
+    .btn:active,
+    .nav-link:active,
+    .profile-btn:active,
+    .stat-card:active,
+    .feature-block:active,
+    .activity-item:active,
+    .file-upload-area:active,
+    .start-campaign-btn:active,
+    .auth-btn:active:not(:disabled),
+    .social-btn:active {
+        transform: scale(0.98) translateZ(0);
+    }
+}
+
+/* Optimize for low-end devices */
+@media (max-width: 480px) {
+    /* Reduce backdrop filter complexity */
+    .dashboard-header,
+    .stat-card,
+    .campaign-card,
+    .activity-card,
+    .feature-block {
+        backdrop-filter: blur(5px);
+        -webkit-backdrop-filter: blur(5px);
+    }
+    
+    /* Simplify animations */
+    .animate-float {
+        animation: none;
+    }
+    
+    .animate-pulse {
+        animation-duration: 4s;
+    }
+}
+
+/* Optimize for landscape orientation */
+@media (orientation: landscape) and (max-height: 500px) {
+    /* Reduce vertical animations */
+    .animate-float {
+        animation: none;
+    }
+    
+    /* Optimize for limited vertical space */
+    .dashboard-container,
+    .auth-container {
+        min-height: 100vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+} 

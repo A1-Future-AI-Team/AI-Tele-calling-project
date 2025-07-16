@@ -49,26 +49,19 @@ class DashboardManager {
 
     setupProfileDropdown() {
         const profileBtn = document.getElementById('profileBtn');
-        const profileDropdown = document.querySelector('.profile-dropdown');
-        const dropdownMenu = document.getElementById('profileDropdown');
-
-        if (profileBtn && profileDropdown) {
-            profileBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                profileDropdown.classList.toggle('active');
+        const dropdown = document.getElementById('profileDropdown');
+        
+        if (profileBtn && dropdown) {
+            profileBtn.addEventListener('click', () => {
+                dropdown.classList.toggle('active');
             });
-
+            
             // Close dropdown when clicking outside
-            document.addEventListener('click', () => {
-                profileDropdown.classList.remove('active');
+            document.addEventListener('click', (e) => {
+                if (!profileBtn.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.remove('active');
+                }
             });
-
-            // Prevent dropdown from closing when clicking inside
-            if (dropdownMenu) {
-                dropdownMenu.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                });
-            }
         }
     }
 
@@ -468,7 +461,7 @@ class DashboardManager {
         const transcriptEntryCount = activity.transcriptEntryCount || 0;
 
         const transcriptLink = hasTranscript && transcriptId
-            ? `<a href="/transcript-viewer.html?id=${transcriptId}" class="transcript-link" target="_blank">
+            ? `<a href="/transcript-viewer?id=${transcriptId}" class="transcript-link" target="_blank">
                  <i class="fas fa-file-text"></i> View Transcript (${transcriptEntryCount} messages)
                </a>`
             : '<span class="transcript-link no-transcript">No transcript</span>';

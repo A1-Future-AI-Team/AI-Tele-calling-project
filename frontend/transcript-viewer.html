@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Transcript Viewer - TeleCall AI</title>
+    <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0idXJsKCNncmFkaWVudDApIi8+CjxwYXRoIGQ9Ik0xMCA5QzEwIDcuODk1NDMgMTAuODk1NCA3IDEyIDdIMjBDMjEuMTA0NiA3IDIyIDcuODk1NCAyMiA5VjEyQzIyIDEzLjEwNDYgMjEuMTA0NiAxNCAyMCAzSDExQzEwLjg5NTQgMTQgMTAgMTMuMTA0NiAxMCAxMlY5WiIgZmlsbD0id2hpdGUiLz4KPGVmcz4KPGxpbmVhckdyYWRpZW50IGlkPSJncmFkaWVudDAiIHgxPSIwIiB5MT0iMCIgeDI9IjMyIiB5Mj0iMzIiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iIzY2N0VFQSIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiM3NjRCQTIiLz4KPC9saW5lYXJHcmFkaWVudD4KPC9kZWZzPgo8L3N2Zz4K">
     <link rel="stylesheet" href="styles/main.css">
     <link rel="stylesheet" href="styles/dashboard.css">
+    <link rel="stylesheet" href="styles/performance.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         .transcript-container {
@@ -113,17 +115,19 @@
             align-items: center;
             gap: 0.5rem;
             padding: 0.75rem 1.5rem;
-            background: #667eea;
-            color: white;
+            background: #00ff88;
+            color: #0a0a0a;
             text-decoration: none;
             border-radius: 8px;
             font-weight: 500;
-            transition: background 0.2s;
+            transition: all 0.3s ease;
             margin-bottom: 1rem;
         }
         
         .back-button:hover {
-            background: #5a67d8;
+            background: #00e676;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 255, 136, 0.3);
         }
         
         .loading {
@@ -158,11 +162,61 @@
 </head>
 <body>
     <div class="dashboard-container">
-        <div class="transcript-container">
-            <a href="javascript:history.back()" class="back-button">
-                <i class="fas fa-arrow-left"></i>
-                Back to Call Logs
-            </a>
+        <!-- Top Navbar -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <!-- Brand Logo -->
+                <div class="brand-logo">
+                    <div class="logo-icon">
+                        <i class="fas fa-phone-alt"></i>
+                    </div>
+                    <span class="brand-name">TeleCall AI</span>
+                </div>
+                
+                <!-- Navigation Menu -->
+                <nav class="nav-menu">
+                    <a href="/dashboard" class="nav-link">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a href="/call-logs" class="nav-link">
+                        <i class="fas fa-list"></i>
+                        <span>Call Logs</span>
+                    </a>
+                    <a href="/transcripts" class="nav-link active">
+                        <i class="fas fa-file-text"></i>
+                        <span>Transcripts</span>
+                    </a>
+                </nav>
+                
+                <!-- Profile Section -->
+                <div class="profile-section">
+                    <div class="profile-dropdown">
+                        <button class="profile-btn" id="profileBtn">
+                            <div class="profile-avatar">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <span class="profile-name">Admin</span>
+                            <i class="fas fa-chevron-down profile-arrow"></i>
+                        </button>
+                        
+                        <div class="dropdown-menu" id="profileDropdown">
+                            <button class="dropdown-item logout-item" id="logoutBtn">
+                                <i class="fas fa-sign-out-alt"></i>
+                                <span>Logout</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <main class="dashboard-main">
+            <div class="transcript-container">
+                <a href="/transcripts" class="back-button">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Transcripts
+                </a>
             
             <div id="loading" class="loading">
                 <i class="fas fa-spinner fa-spin"></i>
@@ -192,83 +246,7 @@
         </div>
     </div>
 
-    <script>
-        async function loadTranscript() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const transcriptId = urlParams.get('id');
-            
-            if (!transcriptId) {
-                showError('No transcript ID provided');
-                return;
-            }
-            
-            try {
-                const response = await fetch(`/api/transcript/${transcriptId}`);
-                const result = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(result.error || 'Failed to load transcript');
-                }
-                
-                displayTranscript(result.data);
-            } catch (error) {
-                console.error('Error loading transcript:', error);
-                showError(error.message);
-            }
-        }
-        
-        function displayTranscript(data) {
-            const transcript = data;
-            
-            // Update header information
-            document.getElementById('contact-info').textContent = 
-                `Contact: ${transcript.contactId?.name || 'Unknown'} (${transcript.contactId?.phone || 'Unknown'})`;
-            document.getElementById('campaign-info').textContent = 
-                `Campaign: ${transcript.campaignId?.objective || 'Unknown'}`;
-            
-            // Display transcript entries
-            const entriesContainer = document.getElementById('transcript-entries');
-            entriesContainer.innerHTML = '';
-            
-            if (!transcript.entries || transcript.entries.length === 0) {
-                entriesContainer.innerHTML = '<p style="text-align: center; color: #64748b;">No conversation entries found</p>';
-            } else {
-                transcript.entries.forEach(entry => {
-                    const entryElement = document.createElement('div');
-                    entryElement.className = `transcript-entry ${entry.from}`;
-                    
-                    const avatar = entry.from === 'user' ? 'U' : 'AI';
-                    const senderName = entry.from === 'user' ? 'User' : 'AI Assistant';
-                    
-                    entryElement.innerHTML = `
-                        <div class="entry-avatar ${entry.from}">${avatar}</div>
-                        <div class="entry-content">
-                            <div class="entry-sender">${senderName}</div>
-                            <div class="entry-text">${entry.text}</div>
-                            <div class="entry-time">${new Date(entry.timestamp).toLocaleString()}</div>
-                        </div>
-                    `;
-                    
-                    entriesContainer.appendChild(entryElement);
-                });
-            }
-            
-            // Hide loading, show content
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('transcript-content').style.display = 'block';
-        }
-        
-        function showError(message) {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('error').style.display = 'block';
-            document.getElementById('error').innerHTML = `
-                <i class="fas fa-exclamation-triangle"></i>
-                <p>${message}</p>
-            `;
-        }
-        
-        // Load transcript when page loads
-        document.addEventListener('DOMContentLoaded', loadTranscript);
-    </script>
+    <script src="scripts/transcript-viewer.js"></script>
+    <script src="scripts/performance.js"></script>
 </body>
 </html> 

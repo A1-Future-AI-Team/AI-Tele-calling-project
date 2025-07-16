@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="styles/main.css">
     <link rel="stylesheet" href="styles/dashboard.css">
     <link rel="stylesheet" href="styles/responsive.css">
+    <link rel="stylesheet" href="styles/performance.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -241,6 +242,24 @@
           color: #222;
           background: #fff;
         }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Mobile-specific spinner fixes */
+        @media (max-width: 768px) {
+            .spinner > div {
+                -webkit-transform: translateZ(0);
+                transform: translateZ(0);
+                -webkit-backface-visibility: hidden;
+                backface-visibility: hidden;
+                -webkit-perspective: 1000px;
+                perspective: 1000px;
+                will-change: transform;
+            }
+        }
     </style>
 </head>
 <body>
@@ -257,21 +276,17 @@
                 </div>
                 <!-- Navigation Menu -->
                 <nav class="nav-menu">
-                    <a href="/dashboard.html" class="nav-link">
-                        <i class="fas fa-home"></i>
+                    <a href="/dashboard" class="nav-link">
+                        <i class="fas fa-chart-line"></i>
                         <span>Dashboard</span>
                     </a>
-                    <a href="/call-logs.html" class="nav-link active">
+                    <a href="/call-logs" class="nav-link active">
                         <i class="fas fa-list"></i>
                         <span>Call Logs</span>
                     </a>
-                    <a href="/transcripts.html" class="nav-link">
+                    <a href="/transcripts" class="nav-link">
                         <i class="fas fa-file-text"></i>
                         <span>Transcripts</span>
-                    </a>
-                    <a href="/settings.html" class="nav-link">
-                        <i class="fas fa-cog"></i>
-                        <span>Settings</span>
                     </a>
                 </nav>
                 <!-- Profile Section -->
@@ -285,15 +300,6 @@
                             <i class="fas fa-chevron-down profile-arrow"></i>
                         </button>
                         <div class="dropdown-menu" id="profileDropdown">
-                            <a href="#" class="dropdown-item">
-                                <i class="fas fa-user-circle"></i>
-                                <span>Profile</span>
-                            </a>
-                            <a href="#" class="dropdown-item">
-                                <i class="fas fa-cog"></i>
-                                <span>Account Settings</span>
-                            </a>
-                            <div class="dropdown-divider"></div>
                             <button class="dropdown-item logout-item" id="logoutBtn">
                                 <i class="fas fa-sign-out-alt"></i>
                                 <span>Logout</span>
@@ -310,7 +316,14 @@
                         <h2 style="color: #000;">Call Logs</h2>
                         <select id="campaignSelector" class="campaign-selector" style="display:none;"></select>
                     </div>
-                    <div class="activity-content" id="activityContent">
+                    <!-- Loading State -->
+                    <div id="loadingState" class="loading-spinner" style="display: flex; justify-content: center; align-items: center; padding: 3rem;">
+                        <div class="spinner" style="width: 40px; height: 40px; position: relative;">
+                            <div style="width: 100%; height: 100%; border: 3px solid rgba(0, 255, 136, 0.2); border-top: 3px solid #00ff88; border-radius: 50%; animation: spin 1s linear infinite; box-sizing: border-box;"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="activity-content" id="activityContent" style="display: none;">
                         <!-- Call logs will be rendered here -->
                     </div>
                 </div>
@@ -319,5 +332,6 @@
     </div>
     <script src="scripts/api.js"></script>
     <script src="scripts/call-logs.js"></script>
+    <script src="scripts/performance.js"></script>
 </body>
 </html> 

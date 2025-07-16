@@ -5,9 +5,12 @@
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #f8f6f2; /* Cream background matching landing page */
     position: relative;
     overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    will-change: scroll-position;
+    transform: translateZ(0);
 }
 
 .dashboard-container::before {
@@ -15,21 +18,21 @@
     position: absolute;
     top: 0;
     left: 0;
-    right: 0;
-    bottom: 0;
-    background: 
-        radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-        radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.15) 0%, transparent 50%);
+    width: 100%;
+    height: 100%;
+    background-image: radial-gradient(circle, #666666 1px, transparent 1px);
+    background-size: 20px 20px;
+    opacity: 0.3;
     pointer-events: none;
     z-index: 0;
 }
 
 /* Header Styles */
 .dashboard-header {
-    background: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(20px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 4px 32px rgba(0, 0, 0, 0.1);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 32px rgba(0, 0, 0, 0.08);
     position: sticky;
     top: 0;
     z-index: 100;
@@ -51,33 +54,32 @@
     gap: 0.75rem;
     font-weight: 800;
     font-size: 1.6rem;
-    color: #667eea;
+    color: #2c3e50;
 }
 
 .logo-icon {
     width: 52px;
     height: 52px;
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: #00ff88; /* Green from landing page */
     border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: #0a0a0a;
     font-size: 1.3rem;
     box-shadow: 
-        0 4px 12px rgba(102, 126, 234, 0.3),
-        0 2px 4px rgba(102, 126, 234, 0.2);
+        0 4px 12px rgba(0, 255, 136, 0.3),
+        0 2px 4px rgba(0, 255, 136, 0.2);
     border: 2px solid rgba(255, 255, 255, 0.2);
 }
 
 .brand-name {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: #0a0a0a; /* Black from landing page */
     letter-spacing: -0.01em;
     font-weight: 900;
 }
+
+
 
 /* Navigation Menu */
 .nav-menu {
@@ -92,11 +94,13 @@
     padding: 0.75rem 1rem;
     border-radius: 10px;
     text-decoration: none;
-    color: #6b7280;
+    color: #5a6c7d;
     font-weight: 500;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
+    will-change: transform, background-color, color;
+    transform: translateZ(0);
 }
 
 .nav-link::before {
@@ -106,7 +110,7 @@
     left: -100%;
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+    background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.1), transparent);
     transition: left 0.5s ease;
 }
 
@@ -115,15 +119,15 @@
 }
 
 .nav-link:hover {
-    color: var(--primary-color);
-    background: rgba(102, 126, 234, 0.1);
+    color: #0a0a0a;
+    background: rgba(0, 255, 136, 0.1);
     transform: translateY(-2px);
 }
 
 .nav-link.active {
-    color: var(--primary-color);
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15));
-    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.2);
+    color: #0a0a0a;
+    background: rgba(0, 255, 136, 0.15);
+    box-shadow: 0 2px 10px rgba(0, 255, 136, 0.2);
 }
 
 /* Profile Section */
@@ -141,29 +145,31 @@
     gap: 0.5rem;
     padding: 0.5rem 1rem;
     border: none;
-    background: rgba(102, 126, 234, 0.1);
+    background: rgba(0, 255, 136, 0.1);
     border-radius: 50px;
     cursor: pointer;
-    transition: all 0.3s ease;
-    color: #4b5563;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    color: #0a0a0a;
     font-weight: 500;
+    will-change: transform, background-color, box-shadow;
+    transform: translateZ(0);
 }
 
 .profile-btn:hover {
-    background: rgba(102, 126, 234, 0.2);
+    background: rgba(0, 255, 136, 0.2);
     transform: translateY(-2px);
-    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.2);
+    box-shadow: 0 4px 20px rgba(0, 255, 136, 0.2);
 }
 
 .profile-avatar {
     width: 32px;
     height: 32px;
-    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    background: #00ff88; /* Green from landing page */
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: #0a0a0a;
     font-size: 0.9rem;
 }
 
@@ -188,8 +194,10 @@
     opacity: 0;
     visibility: hidden;
     transform: translateY(-10px);
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 1000;
+    will-change: opacity, visibility, transform;
+    transform: translateZ(0);
 }
 
 .profile-dropdown.active .dropdown-menu {
@@ -258,11 +266,8 @@
 
 .dashboard-title {
     font-size: 3rem;
-    font-weight: 900;
-    background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 50%, #ffffff 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-weight: 800;
+    color: #0a0a0a; /* Black from landing page */
     margin-bottom: 1rem;
     letter-spacing: -0.02em;
     text-transform: none;
@@ -270,7 +275,7 @@
 
 .dashboard-subtitle {
     font-size: 1.3rem;
-    color: #ffffff;
+    color: #5a6c7d;
     font-weight: 600;
     opacity: 0.95;
     letter-spacing: 0.01em;
@@ -288,18 +293,20 @@
 }
 
 .stat-card {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
     border-radius: 20px;
     padding: 2rem;
     display: flex;
     align-items: center;
     gap: 1.5rem;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    transition: all 0.3s ease;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
+    will-change: transform, box-shadow;
+    transform: translateZ(0);
 }
 
 .stat-card::before {
@@ -334,10 +341,10 @@
     flex-shrink: 0;
 }
 
-.phone-icon { background: linear-gradient(135deg, #667eea, #764ba2); }
-.success-icon { background: linear-gradient(135deg, #11998e, #38ef7d); }
-.chart-icon { background: linear-gradient(135deg, #f093fb, #f5576c); }
-.campaign-icon { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+.phone-icon { background: #a8a4e6; } /* Light purple */
+.success-icon { background: #98D8C8; } /* Light green */
+.chart-icon { background: #F7DC6F; } /* Light yellow */
+.campaign-icon { background: #85C1E9; } /* Light blue */
 
 .stat-content {
     flex: 1;
@@ -345,7 +352,7 @@
 
 .stat-label {
     font-size: 0.9rem;
-    color: #6b7280;
+    color: #5a6c7d;
     margin: 0 0 0.5rem 0;
     font-weight: 600;
 }
@@ -353,7 +360,7 @@
 .stat-value {
     font-size: 2rem;
     font-weight: 700;
-    color: #1f2937;
+    color: #0a0a0a; /* Black from landing page */
     margin: 0 0 0.25rem 0;
 }
 
@@ -386,14 +393,35 @@
 }
 
 .campaign-card {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
     border-radius: 24px;
     padding: 2.5rem;
-    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     margin-bottom: 1rem;
     overflow: visible;
+    position: relative;
+}
+
+.campaign-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: radial-gradient(circle, #666666 1px, transparent 1px);
+    background-size: 20px 20px;
+    opacity: 0.1;
+    pointer-events: none;
+    z-index: 0;
+    border-radius: 24px;
+}
+
+.campaign-card > * {
+    position: relative;
+    z-index: 1;
 }
 
 .campaign-header {
@@ -404,12 +432,12 @@
 .campaign-title {
     font-size: 1.8rem;
     font-weight: 700;
-    color: #1f2937;
+    color: #0a0a0a; /* Black from landing page */
     margin-bottom: 0.5rem;
 }
 
 .campaign-description {
-    color: #4b5563;
+    color: #5a6c7d;
     font-size: 1rem;
     line-height: 1.6;
     font-weight: 500;
@@ -440,7 +468,7 @@
 
 .form-group label {
     font-weight: 600;
-    color: #1f2937;
+    color: #0a0a0a; /* Black from landing page */
     font-size: 0.9rem;
     display: flex;
     align-items: center;
@@ -449,7 +477,7 @@
 }
 
 .form-group label i {
-    color: #667eea;
+    color: #00ff88; /* Green from landing page */
     font-size: 0.9rem;
 }
 
@@ -460,7 +488,9 @@
     padding: 2rem;
     text-align: center;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: border-color, background-color, transform;
+    transform: translateZ(0);
     background: rgba(102, 126, 234, 0.02);
     position: relative;
     overflow: hidden;
@@ -610,27 +640,29 @@
 }
 
 .start-campaign-btn {
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: #00ff88; /* Green from landing page */
     border: none;
     border-radius: 16px;
     padding: 1.25rem 2.5rem;
-    color: white;
+    color: #0a0a0a; /* Dark text for contrast */
     font-weight: 700;
     font-size: 1.1rem;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: center;
     gap: 0.75rem;
     box-shadow: 
-        0 4px 16px rgba(102, 126, 234, 0.4),
-        0 8px 32px rgba(102, 126, 234, 0.2);
+        0 4px 16px rgba(0, 255, 136, 0.4),
+        0 8px 32px rgba(0, 255, 136, 0.2);
     position: relative;
     overflow: hidden;
     min-width: 250px;
     justify-content: center;
     text-transform: none;
     letter-spacing: 0.02em;
+    will-change: transform, box-shadow, background-color;
+    transform: translateZ(0);
 }
 
 .start-campaign-btn::before {
@@ -651,9 +683,9 @@
 .start-campaign-btn:hover {
     transform: translateY(-4px) scale(1.02);
     box-shadow: 
-        0 8px 24px rgba(102, 126, 234, 0.5),
-        0 16px 48px rgba(102, 126, 234, 0.3);
-    background: linear-gradient(135deg, #5a67d8, #6b46c1);
+        0 8px 24px rgba(0, 255, 136, 0.5),
+        0 16px 48px rgba(0, 255, 136, 0.3);
+    background: #00e676; /* Darker green on hover */
 }
 
 .start-campaign-btn:active {
@@ -719,8 +751,10 @@
     text-decoration: none;
     font-weight: 500;
     font-size: 0.9rem;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
+    will-change: transform, background-color;
+    transform: translateZ(0);
 }
 
 .view-all-btn:hover {
@@ -788,8 +822,10 @@
     background: rgba(102, 126, 234, 0.05);
     border-radius: 12px;
     border-left: 4px solid #667eea;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
+    will-change: transform, background-color, box-shadow;
+    transform: translateZ(0);
 }
 
 .activity-item:hover {

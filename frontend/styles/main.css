@@ -60,9 +60,9 @@
     --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     
     /* Transitions */
-    --transition-fast: 0.15s ease-out;
-    --transition-normal: 0.3s ease-out;
-    --transition-slow: 0.5s ease-out;
+--transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+--transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+--transition-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     
     /* Z-index */
     --z-dropdown: 1000;
@@ -90,6 +90,7 @@ html {
     line-height: 1.15;
     -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
 }
 
 body {
@@ -102,6 +103,11 @@ body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    will-change: scroll-position;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
 }
 
 /* Typography */
@@ -281,27 +287,37 @@ a:hover {
 
 /* Animation Classes */
 .animate-float {
-    animation: float 3s ease-in-out infinite;
+    animation: float 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    will-change: transform;
+    transform: translateZ(0);
 }
 
 .animate-pulse {
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    will-change: opacity, transform;
 }
 
 .animate-fade-in {
-    animation: fadeIn 0.6s ease-out;
+    animation: fadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: opacity, transform;
 }
 
 .animate-slide-in-right {
-    animation: slideInRight 0.6s ease-out;
+    animation: slideInRight 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: opacity, transform;
+    transform: translateZ(0);
 }
 
 .animate-slide-in-left {
-    animation: slideInLeft 0.6s ease-out;
+    animation: slideInLeft 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: opacity, transform;
+    transform: translateZ(0);
 }
 
 .animate-spin {
     animation: spin 1s linear infinite;
+    will-change: transform;
+    transform: translateZ(0);
 }
 
 /* Responsive */

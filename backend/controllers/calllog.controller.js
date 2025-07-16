@@ -88,6 +88,30 @@ const callLogController = {
       console.error('Error fetching recent call logs:', error);
       res.status(500).json({ error: 'Failed to fetch recent call logs' });
     }
+  },
+
+  async getAllLogsDebug(req, res) {
+    try {
+      const logs = await CallLog.find()
+        .sort({ createdAt: -1 })
+        .populate('contactId')
+        .populate('campaignId');
+      
+      const transcripts = await Transcript.find()
+        .populate('contactId')
+        .populate('campaignId');
+      
+      res.json({
+        success: true,
+        callLogsCount: logs.length,
+        transcriptsCount: transcripts.length,
+        callLogs: logs,
+        transcripts: transcripts
+      });
+    } catch (error) {
+      console.error('Error in debug endpoint:', error);
+      res.status(500).json({ error: 'Failed to fetch debug data' });
+    }
   }
 };
 

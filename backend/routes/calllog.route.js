@@ -5,5 +5,6 @@ const router = express.Router();
 
 router.get('/calllog', callLogController.getAllLogs);
 router.get('/logs/calls', callLogController.getRecentLogs);
+router.get('/debug/all', callLogController.getAllLogsDebug);
 
 export default router; 

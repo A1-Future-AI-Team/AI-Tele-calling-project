@@ -7,6 +7,7 @@
     <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0idXJsKCNncmFkaWVudDApIi8+CjxwYXRoIGQ9Ik0xMCA5QzEwIDcuODk1NDMgMTAuODk1NCA3IDEyIDdIMjBDMjEuMTA0NiA3IDIyIDcuODk1NDMgMjIgOVYxMkMyMiAxMy4xMDQ2IDIxLjEwNDYgMTQgMjAgMTRIMTJDMTAuODk1NCAxNCAxMCAxMy4xMDQ2IDEwIDEyVjlaIiBmaWxsPSJ3aGl0ZSIvPgo8ZGVmcz4KPGxpbmVhckdyYWRpZW50IGlkPSJncmFkaWVudDAiIHgxPSIwIiB5MT0iMCIgeDI9IjMyIiB5Mj0iMzIiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KPHN0b3Agc3RvcC1jb2xvcj0iIzY2N0VFQSIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiM3NjRCQTIiLz4KPC9saW5lYXJHcmFkaWVudD4KPC9kZWZzPgo8L3N2Zz4K">
     <link rel="stylesheet" href="styles/main.css">
     <link rel="stylesheet" href="styles/dashboard.css">
+    <link rel="stylesheet" href="styles/performance.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -26,20 +27,16 @@
                 <!-- Navigation Menu -->
                 <nav class="nav-menu">
                     <a href="/dashboard" class="nav-link active">
-                        <i class="fas fa-home"></i>
+                        <i class="fas fa-chart-line"></i>
                         <span>Dashboard</span>
                     </a>
-                    <a href="/call-logs.html" class="nav-link">
+                    <a href="/call-logs" class="nav-link">
                         <i class="fas fa-list"></i>
                         <span>Call Logs</span>
                     </a>
                     <a href="/transcripts" class="nav-link">
                         <i class="fas fa-file-text"></i>
                         <span>Transcripts</span>
-                    </a>
-                    <a href="/settings" class="nav-link">
-                        <i class="fas fa-cog"></i>
-                        <span>Settings</span>
                     </a>
                 </nav>
                 
@@ -55,15 +52,6 @@
                         </button>
                         
                         <div class="dropdown-menu" id="profileDropdown">
-                            <a href="#" class="dropdown-item">
-                                <i class="fas fa-user-circle"></i>
-                                <span>Profile</span>
-                            </a>
-                            <a href="#" class="dropdown-item">
-                                <i class="fas fa-cog"></i>
-                                <span>Account Settings</span>
-                            </a>
-                            <div class="dropdown-divider"></div>
                             <button class="dropdown-item logout-item" id="logoutBtn">
                                 <i class="fas fa-sign-out-alt"></i>
                                 <span>Logout</span>
@@ -241,5 +229,6 @@
     
     <script src="scripts/api.js"></script>
     <script src="scripts/dashboard.js"></script>
+    <script src="scripts/performance.js"></script>
 </body>
 </html> 
