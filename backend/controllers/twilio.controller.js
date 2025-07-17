@@ -564,6 +564,7 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
                 
                 // Make request to Reverie STT API using official format
                 // Map campaign language to STT language code
+                // This ensures STT processes audio in the correct campaign language
                 const sttLanguageMap = {
                     'English': 'en',
                     'Hindi': 'hi',
@@ -590,6 +591,30 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
                     'domain': 'generic'
                 });
                 
+                // Additional debugging for Reverie STT configuration
+                console.log('🔧 Reverie STT Configuration Check:');
+                console.log(`   - API Key: ${process.env.REVERIE_API_KEY ? 'Present' : 'MISSING'}`);
+                console.log(`   - App ID: ${process.env.REVERIE_APP_ID ? 'Present' : 'MISSING'}`);
+                console.log(`   - Target Language: ${sttLang} (from campaign: ${currentLanguage})`);
+                console.log(`   - Audio Size: ${audioBuffer.byteLength} bytes`);
+                console.log(`   - Audio Format: ${fileContentType}`);
+                
+                // Validate Reverie STT configuration
+                if (!process.env.REVERIE_API_KEY || !process.env.REVERIE_APP_ID) {
+                    console.error('❌ Reverie STT API configuration missing!');
+                    console.error('   - REVERIE_API_KEY:', process.env.REVERIE_API_KEY ? 'SET' : 'MISSING');
+                    console.error('   - REVERIE_APP_ID:', process.env.REVERIE_APP_ID ? 'SET' : 'MISSING');
+                    
+                    // Provide language-appropriate error message
+                    twiml.say({ voice: 'alice', language: this.mapLanguageToTwimlLanguage(currentLanguage) }, 
+                        currentLanguage === 'Hindi' ? 'माफ़ करें, सेवा कॉन्फ़िगरेशन में समस्या है। कृपया बाद में पुनः प्रयास करें।' :
+                        currentLanguage === 'Bengali' ? 'দুঃখিত, পরিষেবা কনফিগারেশন সমস্যা। দয়া করে পরে আবার চেষ্টা করুন।' :
+                        'Sorry, service configuration issue. Please try again later.'
+                    );
+                    res.type('text/xml');
+                    return res.send(twiml.toString());
+                }
+                
                 let sttResponse;
                 try {
                     // Log the actual headers being sent
@@ -604,8 +629,20 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
                     console.error('❌ STT Error Details:', sttError.response?.data || 'No response data');
                     console.error('❌ STT Error Status:', sttError.response?.status || 'No status');
                     
-                    // Fallback to Twilio's built-in transcription if STT fails
-                    console.log('🔄 Falling back to Twilio transcription...');
+                    // Enhanced error logging for debugging
+                    if (sttError.response) {
+                        console.error('❌ STT API Response Headers:', sttError.response.headers);
+                        try {
+                            const errorData = JSON.parse(sttError.response.data.toString());
+                            console.error('❌ STT API Error JSON:', errorData);
+                        } catch (e) {
+                            console.error('❌ STT API Raw Error Data:', sttError.response.data.toString());
+                        }
+                    }
+                    
+                    // Don't fallback to Twilio transcription as it only supports English
+                    // Instead, provide a language-appropriate error message and retry
+                    console.log('🔄 Reverie STT failed, providing language-appropriate retry message...');
                     twiml.say({ voice: 'alice', language: this.mapLanguageToTwimlLanguage(currentLanguage) }, 
                         currentLanguage === 'Hindi' ? 'माफ़ करें, तकनीकी समस्या है। कृपया फिर से बोलें।' :
                         currentLanguage === 'Bengali' ? 'দুঃখিত, প্রযুক্তিগত সমস্যা। দয়া করে আবার বলুন।' :
@@ -643,14 +680,12 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
                 
                 // If Reverie STT fails, try to use Twilio's transcription as fallback
                 if (!transcribedText || transcribedText.trim().toLowerCase() === 'no transcription available') {
-                    console.log('⚠️ Reverie STT returned no transcription, checking for Twilio transcription...');
+                    console.log('⚠️ Reverie STT returned no transcription, treating as failed transcription...');
                     
-                    // Check if Twilio provided transcription in the webhook
-                    const twilioTranscription = req.body.SpeechResult || req.body.TranscriptionText;
-                    if (twilioTranscription) {
-                        transcribedText = twilioTranscription;
-                        console.log(`📝 Using Twilio transcription: "${transcribedText}"`);
-                    }
+                    // Don't use Twilio transcription as fallback since it only supports English
+                    // Instead, treat this as a failed transcription that needs retry
+                    transcribedText = ''; // Clear any invalid transcription
+                    console.log('🔄 Will retry with Reverie STT instead of using English-only Twilio transcription');
                 }
                 
                 // Initialize failCountKey at the top level for proper scoping
