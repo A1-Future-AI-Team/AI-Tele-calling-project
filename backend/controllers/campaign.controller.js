@@ -5,6 +5,47 @@ import Campaign from '../models/campaign.model.js';
 import Contact from '../models/contact.model.js';
 import simulatorService from '../services/simulator.service.js';
 import twilioService from '../services/twilio.service.js';
+import { processCampaignDoc } from '../services/embed.service.js';
+
+// Dynamic import for pdf-parse to avoid startup issues
+let pdfParse = null;
+async function getPdfParser() {
+    if (!pdfParse) {
+        try {
+            const pdfModule = await import('pdf-parse');
+            pdfParse = pdfModule.default;
+        } catch (error) {
+            console.error('❌ Failed to load pdf-parse module:', error.message);
+            return null;
+        }
+    }
+    return pdfParse;
+}
+
+// Simple fallback PDF text extraction (basic implementation)
+function extractBasicPdfText(pdfBuffer) {
+    try {
+        // This is a very basic fallback - in a real implementation,
+        // you might want to use a different PDF parsing library
+        const bufferString = pdfBuffer.toString('utf8');
+        
+        // Look for text content in the PDF buffer
+        // This is a simplified approach and may not work for all PDFs
+        const textMatches = bufferString.match(/\(([^)]+)\)/g);
+        if (textMatches) {
+            return textMatches
+                .map(match => match.replace(/[()]/g, ''))
+                .filter(text => text.length > 3 && !text.includes('\\'))
+                .join(' ')
+                .trim();
+        }
+        
+        return 'PDF content extracted (basic parsing)';
+    } catch (error) {
+        console.error('❌ Basic PDF parsing failed:', error);
+        return 'PDF content could not be extracted';
+    }
+}
 
 class CampaignController {
     /**
@@ -24,15 +65,16 @@ class CampaignController {
             }
 
             // Check if CSV file was uploaded
-            if (!req.file) {
+            if (!req.files || !req.files.csv) {
                 return res.status(400).json({
                     success: false,
                     message: 'CSV file is required'
                 });
             }
 
-            const csvFilePath = req.file.path;
+            const csvFilePath = req.files.csv[0].path;
             const contacts = [];
+            let campaignDocData = null;
 
             try {
                 // Parse CSV file
@@ -72,12 +114,76 @@ class CampaignController {
                     });
                 }
 
+                // Process PDF file if uploaded
+                if (req.files.pdf) {
+                    try {
+                        console.log('📄 Processing PDF file...');
+                        const pdfFilePath = req.files.pdf[0].path;
+                        const pdfBuffer = fs.readFileSync(pdfFilePath);
+                        
+                        // Get PDF parser dynamically
+                        const pdfParser = await getPdfParser();
+                        let extractedText = '';
+                        
+                        if (pdfParser) {
+                            // Use pdf-parse library
+                            const pdfData = await pdfParser(pdfBuffer);
+                            extractedText = pdfData.text.trim();
+                        } else {
+                            // Use fallback method
+                            console.log('⚠️ Using fallback PDF parsing method');
+                            extractedText = extractBasicPdfText(pdfBuffer);
+                        }
+                        
+                        console.log(`✅ PDF parsed successfully. Extracted ${extractedText.length} characters`);
+                        
+                        // Only store PDF data if we have meaningful text
+                        if (extractedText && extractedText.length > 10) {
+                            campaignDocData = {
+                                originalName: req.files.pdf[0].originalname,
+                                extractedText: extractedText
+                            };
+                            
+                            // Process PDF for RAG using new embedding service
+                            try {
+                                console.log('🔄 Processing PDF for RAG chunks...');
+                                embedCampaignDocText(extractedText, savedCampaign._id)
+                                    .then(chunkCount => {
+                                        console.log(`✅ RAG processing completed: ${chunkCount} chunks created`);
+                                    })
+                                    .catch(ragError => {
+                                        console.error('❌ RAG processing failed:', ragError);
+                                    });
+                            } catch (ragError) {
+                                console.error('❌ Failed to start RAG processing:', ragError);
+                            }
+                        } else {
+                            console.log('⚠️ Extracted text too short, not storing PDF data');
+                        }
+                        
+                        // Delete the temporary PDF file
+                        fs.unlinkSync(pdfFilePath);
+                        
+                    } catch (pdfError) {
+                        console.error('❌ PDF parsing error:', pdfError);
+                        
+                        // Delete the temporary PDF file if it exists
+                        if (req.files.pdf && fs.existsSync(req.files.pdf[0].path)) {
+                            fs.unlinkSync(req.files.pdf[0].path);
+                        }
+                        
+                        // Continue without PDF data
+                        console.log('⚠️ Continuing without PDF data due to parsing error');
+                    }
+                }
+
                 // Create new campaign
                 const campaign = new Campaign({
                     language,
                     objective,
                     sampleFlow: sampleFlow || '',
                     contactCount: contacts.length,
+                    campaignDoc: campaignDocData,
                     createdAt: new Date()
                 });
 
@@ -107,13 +213,18 @@ class CampaignController {
                     success: true,
                     message: 'Campaign created successfully',
                     campaignId: savedCampaign._id,
-                    totalContacts: contacts.length
+                    totalContacts: contacts.length,
+                    pdfProcessed: !!campaignDocData,
+                    pdfTextLength: campaignDocData ? campaignDocData.extractedText.length : 0
                 });
 
             } catch (parseError) {
-                // Delete the temporary file if parsing fails
+                // Delete the temporary files if parsing fails
                 if (fs.existsSync(csvFilePath)) {
                     fs.unlinkSync(csvFilePath);
+                }
+                if (req.files.pdf && fs.existsSync(req.files.pdf[0].path)) {
+                    fs.unlinkSync(req.files.pdf[0].path);
                 }
                 throw parseError;
             }
@@ -121,9 +232,14 @@ class CampaignController {
         } catch (error) {
             console.error('❌ Campaign creation error:', error);
             
-            // Clean up file if it still exists
-            if (req.file && fs.existsSync(req.file.path)) {
-                fs.unlinkSync(req.file.path);
+            // Clean up files if they still exist
+            if (req.files) {
+                if (req.files.csv && fs.existsSync(req.files.csv[0].path)) {
+                    fs.unlinkSync(req.files.csv[0].path);
+                }
+                if (req.files.pdf && fs.existsSync(req.files.pdf[0].path)) {
+                    fs.unlinkSync(req.files.pdf[0].path);
+                }
             }
 
             return res.status(500).json({

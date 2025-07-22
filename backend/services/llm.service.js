@@ -1,6 +1,7 @@
 // services/llm.service.js
 import dotenv from 'dotenv';
 import { Groq } from 'groq-sdk';
+import { retrieveRelevantChunks } from './embed.service.js';
 
 dotenv.config();
 
@@ -23,18 +24,38 @@ function sanitizeText(text) {
 }
 
 /**
- * Generate AI reply using Groq SDK (LLaMA or Mixtral)
+ * Generate AI reply using Groq SDK with RAG (Retrieval-Augmented Generation)
  */
 export async function generateReply({
   objective,
   language,
   conversationHistory = [],
   userInput,
-  sampleFlow = ''
+  sampleFlow = '',
+  campaignId = null
 }) {
   try {
     if (!process.env.GROQ_API_KEY) throw new Error('Missing GROQ_API_KEY');
     if (!objective || !language || !userInput) throw new Error('Missing required input');
+
+    // Retrieve relevant context from campaign document if available
+    let contextInfo = '';
+    if (campaignId) {
+      try {
+        console.log('🔍 Retrieving relevant context for RAG...');
+        const relevantChunks = await retrieveRelevantChunks(campaignId, userInput, 3);
+        
+        if (relevantChunks.length > 0) {
+          contextInfo = `\n\n📄 Relevant Information from Campaign Document:\n${relevantChunks.map((chunk, index) => `${index + 1}. ${chunk.chunk}`).join('\n\n')}`;
+          console.log(`✅ Retrieved ${relevantChunks.length} relevant chunks for context`);
+        } else {
+          console.log('⚠️ No relevant chunks found, proceeding without RAG context');
+        }
+      } catch (ragError) {
+        console.error('❌ RAG retrieval failed:', ragError);
+        console.log('⚠️ Proceeding without RAG context');
+      }
+    }
 
     const systemPrompt = `
 You are an AI voice assistant speaking fluently in ${language}.
@@ -49,8 +70,11 @@ Your job is: ${objective}
 - Use native, fluent expressions and tone
 - Do not ask for feedback or talk about yourself
 - Stay in character at all times
+- Use the provided context information to give more accurate and helpful responses
+- If context is provided, reference it naturally in your conversation
 
-${sampleFlow ? `Here’s how a typical call should sound:\n${sampleFlow.trim()}` : ''}
+${sampleFlow ? `Here's how a typical call should sound:\n${sampleFlow.trim()}` : ''}
+${contextInfo}
 `.trim();
 
     const messages = [
@@ -63,7 +87,7 @@ ${sampleFlow ? `Here’s how a typical call should sound:\n${sampleFlow.trim()}`
     ];
 
     const completion = await groq.chat.completions.create({
-      model: 'meta-llama/llama-4-scout-17b-16e-instruct', // or switch to a LLaMA model if needed
+      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
       messages,
       temperature: 0.6,
       top_p: 1,
