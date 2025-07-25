@@ -2,8 +2,7 @@ import mongoose from 'mongoose';
 
 const campaignChunkSchema = new mongoose.Schema({
   campaignId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Campaign', 
+    type: mongoose.Schema.Types.Mixed, // Allow both ObjectId and String
     required: true 
   },
   chunk: { 

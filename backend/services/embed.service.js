@@ -136,8 +136,20 @@ async function processCampaignDoc(campaignId, fullText) {
     console.log(`📄 Processing campaign document for campaign: ${campaignId}`);
     console.log(`📊 Document length: ${fullText.length} characters`);
 
+    // Convert string campaignId to ObjectId if needed
+    let objectId;
+    try {
+      const mongoose = (await import('mongoose')).default;
+      objectId = mongoose.Types.ObjectId.isValid(campaignId) 
+        ? new mongoose.Types.ObjectId(campaignId)
+        : campaignId; // Keep as string if not valid ObjectId
+    } catch (error) {
+      console.log('⚠️ Using campaignId as string (not valid ObjectId)');
+      objectId = campaignId;
+    }
+
     // Delete existing chunks for this campaign
-    await CampaignChunk.deleteMany({ campaignId });
+    await CampaignChunk.deleteMany({ campaignId: objectId });
     console.log('🗑️ Cleared existing chunks');
 
     // Create chunks
@@ -162,7 +174,7 @@ async function processCampaignDoc(campaignId, fullText) {
           const chunkIndex = i + batchIndex;
           
           await CampaignChunk.create({
-            campaignId,
+            campaignId: objectId,
             chunk,
             embedding,
             chunkIndex
@@ -203,11 +215,23 @@ async function retrieveRelevantChunks(campaignId, query, topK = 3) {
       throw new Error('Missing campaignId or query');
     }
 
+    // Convert string campaignId to ObjectId if needed
+    let objectId;
+    try {
+      const mongoose = (await import('mongoose')).default;
+      objectId = mongoose.Types.ObjectId.isValid(campaignId) 
+        ? new mongoose.Types.ObjectId(campaignId)
+        : campaignId; // Keep as string if not valid ObjectId
+    } catch (error) {
+      console.log('⚠️ Using campaignId as string (not valid ObjectId)');
+      objectId = campaignId;
+    }
+
     // Get query embedding
     const queryEmbedding = await embedText(query);
     
     // Get all chunks for the campaign
-    const chunks = await CampaignChunk.find({ campaignId }).select('chunk embedding');
+    const chunks = await CampaignChunk.find({ campaignId: objectId }).select('chunk embedding');
     
     if (chunks.length === 0) {
       console.log('⚠️ No chunks found for campaign');

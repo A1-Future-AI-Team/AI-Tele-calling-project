@@ -1,15 +1,96 @@
 // services/embedding.service.js
 import { Groq } from 'groq-sdk';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-// In-memory storage for chunks and embeddings
-const chunkStore = new Map(); // campaignId -> [{ chunk, vector, campaignId }]
+// In-memory chunk store for fast access
+const chunkStore = new Map();
+
+// File-based persistent storage
+const CHUNK_STORAGE_DIR = path.join(__dirname, '../chunk-storage');
+
+// Ensure storage directory exists
+if (!fs.existsSync(CHUNK_STORAGE_DIR)) {
+  fs.mkdirSync(CHUNK_STORAGE_DIR, { recursive: true });
+}
+
+/**
+ * Save chunks to persistent storage
+ * @param {string} campaignId - Campaign ID
+ * @param {Array} chunkData - Array of chunk objects
+ */
+function saveChunksToFile(campaignId, chunkData) {
+  try {
+    const filePath = path.join(CHUNK_STORAGE_DIR, `${campaignId}.json`);
+    const dataToSave = {
+      campaignId,
+      chunks: chunkData,
+      createdAt: new Date().toISOString(),
+      chunkCount: chunkData.length
+    };
+    
+    fs.writeFileSync(filePath, JSON.stringify(dataToSave, null, 2));
+    console.log(`💾 Saved ${chunkData.length} chunks to file: ${filePath}`);
+  } catch (error) {
+    console.error('❌ Failed to save chunks to file:', error);
+  }
+}
+
+/**
+ * Load chunks from persistent storage
+ * @param {string} campaignId - Campaign ID
+ * @returns {Array|null} Chunk data or null if not found
+ */
+function loadChunksFromFile(campaignId) {
+  try {
+    const filePath = path.join(CHUNK_STORAGE_DIR, `${campaignId}.json`);
+    
+    if (!fs.existsSync(filePath)) {
+      console.log(`📁 No chunk file found for campaign: ${campaignId}`);
+      return null;
+    }
+    
+    const fileContent = fs.readFileSync(filePath, 'utf8');
+    const data = JSON.parse(fileContent);
+    
+    console.log(`📂 Loaded ${data.chunks.length} chunks from file for campaign: ${campaignId}`);
+    return data.chunks;
+  } catch (error) {
+    console.error('❌ Failed to load chunks from file:', error);
+    return null;
+  }
+}
+
+/**
+ * Clear chunks from both memory and file storage
+ * @param {string} campaignId - Campaign ID
+ */
+function clearChunksFromStorage(campaignId) {
+  try {
+    // Clear from memory
+    chunkStore.delete(campaignId);
+    
+    // Clear from file
+    const filePath = path.join(CHUNK_STORAGE_DIR, `${campaignId}.json`);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(`🗑️ Deleted chunk file: ${filePath}`);
+    }
+  } catch (error) {
+    console.error('❌ Failed to clear chunks from storage:', error);
+  }
+}
 
 /**
  * Calculate cosine similarity between two vectors
@@ -142,7 +223,7 @@ async function embedCampaignDocText(campaignDocText, campaignId) {
     console.log(`📊 Document length: ${campaignDocText.length} characters`);
 
     // Clear existing chunks for this campaign
-    chunkStore.delete(campaignId);
+    clearChunksFromStorage(campaignId);
     console.log('🗑️ Cleared existing chunks');
 
     // Create chunks
@@ -177,7 +258,12 @@ async function embedCampaignDocText(campaignDocText, campaignId) {
     // Store chunks in memory
     chunkStore.set(campaignId, chunkData);
     
+    // Save chunks to persistent storage
+    saveChunksToFile(campaignId, chunkData);
+
     console.log(`🎉 Successfully processed ${chunkData.length} chunks for campaign ${campaignId}`);
+    console.log(`🔍 Stored with key: "${campaignId}" (type: ${typeof campaignId})`);
+    console.log(`🔍 Available keys in chunkStore:`, Array.from(chunkStore.keys()));
     return chunkData.length;
 
   } catch (error) {
@@ -200,10 +286,24 @@ async function getRelevantChunks(query, campaignId, topK = 3) {
     }
 
     // Get chunks for this campaign
-    const campaignChunks = chunkStore.get(campaignId);
+    console.log(`🔍 Looking for campaign: "${campaignId}" (type: ${typeof campaignId})`);
+    console.log(`🔍 Available keys in chunkStore:`, Array.from(chunkStore.keys()));
+    
+    let campaignChunks = chunkStore.get(campaignId);
+    
+    // If not in memory, try to load from file
     if (!campaignChunks || campaignChunks.length === 0) {
-      console.log('⚠️ No chunks found for campaign');
-      return [];
+      console.log('⚠️ No chunks found in memory, trying to load from file...');
+      campaignChunks = loadChunksFromFile(campaignId);
+      
+      if (campaignChunks && campaignChunks.length > 0) {
+        // Load into memory for future use
+        chunkStore.set(campaignId, campaignChunks);
+        console.log(`✅ Loaded ${campaignChunks.length} chunks from file into memory`);
+      } else {
+        console.log('⚠️ No chunks found in file either');
+        return [];
+      }
     }
 
     // Get query embedding
@@ -235,11 +335,12 @@ async function getRelevantChunks(query, campaignId, topK = 3) {
  */
 function clearCampaignChunks(campaignId) {
   if (campaignId) {
-    chunkStore.delete(campaignId);
+    clearChunksFromStorage(campaignId);
     console.log(`🗑️ Cleared chunks for campaign: ${campaignId}`);
   } else {
+    // This function is now primarily for clearing memory, not file storage
     chunkStore.clear();
-    console.log('🗑️ Cleared all chunks');
+    console.log('🗑️ Cleared all chunks from memory');
   }
 }
 
@@ -248,21 +349,51 @@ function clearCampaignChunks(campaignId) {
  * @returns {Object} Statistics about chunk storage
  */
 function getChunkStats() {
-  const stats = {
-    totalCampaigns: chunkStore.size,
-    totalChunks: 0,
-    campaigns: []
-  };
+  const campaigns = [];
+  let totalChunks = 0;
 
+  // Get stats from memory
   for (const [campaignId, chunks] of chunkStore.entries()) {
-    stats.totalChunks += chunks.length;
-    stats.campaigns.push({
+    campaigns.push({
       campaignId,
-      chunkCount: chunks.length
+      chunkCount: chunks.length,
+      sampleChunk: chunks[0]?.chunk || 'No chunks',
+      source: 'memory'
     });
+    totalChunks += chunks.length;
   }
 
-  return stats;
+  // Also check file storage
+  try {
+    const files = fs.readdirSync(CHUNK_STORAGE_DIR);
+    const fileCampaigns = files.filter(file => file.endsWith('.json'));
+    
+    for (const file of fileCampaigns) {
+      const campaignId = file.replace('.json', '');
+      const filePath = path.join(CHUNK_STORAGE_DIR, file);
+      const fileContent = fs.readFileSync(filePath, 'utf8');
+      const data = JSON.parse(fileContent);
+      
+      // Only add if not already in memory
+      if (!chunkStore.has(campaignId)) {
+        campaigns.push({
+          campaignId,
+          chunkCount: data.chunks.length,
+          sampleChunk: data.chunks[0]?.chunk || 'No chunks',
+          source: 'file'
+        });
+        totalChunks += data.chunks.length;
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error reading chunk storage directory:', error);
+  }
+
+  return {
+    totalCampaigns: campaigns.length,
+    totalChunks,
+    campaigns
+  };
 }
 
 export {

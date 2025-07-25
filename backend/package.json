@@ -23,6 +23,7 @@
     "@ffmpeg/util": "^0.12.2",
     "@google/generative-ai": "^0.24.1",
     "@reverieit/reverie-client": "^0.5.0",
+    "@xenova/transformers": "^2.17.2",
     "axios": "^1.10.0",
     "connect-mongo": "^5.1.0",
     "cors": "^2.8.5",
@@ -35,6 +36,8 @@
     "mongoose": "^8.0.3",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
+    "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^5.3.93",
     "twilio": "^5.7.1",
     "uuid": "^11.1.0"
   },

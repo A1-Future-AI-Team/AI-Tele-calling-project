@@ -5,47 +5,9 @@ import Campaign from '../models/campaign.model.js';
 import Contact from '../models/contact.model.js';
 import simulatorService from '../services/simulator.service.js';
 import twilioService from '../services/twilio.service.js';
-import { processCampaignDoc } from '../services/embed.service.js';
+import ragService from '../services/rag.service.js';
 
-// Dynamic import for pdf-parse to avoid startup issues
-let pdfParse = null;
-async function getPdfParser() {
-    if (!pdfParse) {
-        try {
-            const pdfModule = await import('pdf-parse');
-            pdfParse = pdfModule.default;
-        } catch (error) {
-            console.error('❌ Failed to load pdf-parse module:', error.message);
-            return null;
-        }
-    }
-    return pdfParse;
-}
-
-// Simple fallback PDF text extraction (basic implementation)
-function extractBasicPdfText(pdfBuffer) {
-    try {
-        // This is a very basic fallback - in a real implementation,
-        // you might want to use a different PDF parsing library
-        const bufferString = pdfBuffer.toString('utf8');
-        
-        // Look for text content in the PDF buffer
-        // This is a simplified approach and may not work for all PDFs
-        const textMatches = bufferString.match(/\(([^)]+)\)/g);
-        if (textMatches) {
-            return textMatches
-                .map(match => match.replace(/[()]/g, ''))
-                .filter(text => text.length > 3 && !text.includes('\\'))
-                .join(' ')
-                .trim();
-        }
-        
-        return 'PDF content extracted (basic parsing)';
-    } catch (error) {
-        console.error('❌ Basic PDF parsing failed:', error);
-        return 'PDF content could not be extracted';
-    }
-}
+// PDF processing is now handled by the dedicated pdf.service.js
 
 class CampaignController {
     /**
@@ -54,6 +16,10 @@ class CampaignController {
      */
     async startCampaign(req, res) {
         try {
+            console.log('🚀 Campaign creation started');
+            console.log('📋 Request body:', req.body);
+            console.log('📁 Request files:', req.files ? Object.keys(req.files) : 'No files');
+            
             const { language, objective, sampleFlow } = req.body;
             
             // Validate required fields
@@ -73,6 +39,11 @@ class CampaignController {
             }
 
             const csvFilePath = req.files.csv[0].path;
+            console.log('📄 CSV file details:');
+            console.log('   Path:', req.files.csv[0].path);
+            console.log('   Name:', req.files.csv[0].originalname);
+            console.log('   Size:', req.files.csv[0].size, 'bytes');
+            
             const contacts = [];
             let campaignDocData = null;
 
@@ -114,70 +85,15 @@ class CampaignController {
                     });
                 }
 
-                // Process PDF file if uploaded
-                if (req.files.pdf) {
-                    try {
-                        console.log('📄 Processing PDF file...');
-                        const pdfFilePath = req.files.pdf[0].path;
-                        const pdfBuffer = fs.readFileSync(pdfFilePath);
-                        
-                        // Get PDF parser dynamically
-                        const pdfParser = await getPdfParser();
-                        let extractedText = '';
-                        
-                        if (pdfParser) {
-                            // Use pdf-parse library
-                            const pdfData = await pdfParser(pdfBuffer);
-                            extractedText = pdfData.text.trim();
-                        } else {
-                            // Use fallback method
-                            console.log('⚠️ Using fallback PDF parsing method');
-                            extractedText = extractBasicPdfText(pdfBuffer);
-                        }
-                        
-                        console.log(`✅ PDF parsed successfully. Extracted ${extractedText.length} characters`);
-                        
-                        // Only store PDF data if we have meaningful text
-                        if (extractedText && extractedText.length > 10) {
-                            campaignDocData = {
-                                originalName: req.files.pdf[0].originalname,
-                                extractedText: extractedText
-                            };
-                            
-                            // Process PDF for RAG using new embedding service
-                            try {
-                                console.log('🔄 Processing PDF for RAG chunks...');
-                                embedCampaignDocText(extractedText, savedCampaign._id)
-                                    .then(chunkCount => {
-                                        console.log(`✅ RAG processing completed: ${chunkCount} chunks created`);
-                                    })
-                                    .catch(ragError => {
-                                        console.error('❌ RAG processing failed:', ragError);
-                                    });
-                            } catch (ragError) {
-                                console.error('❌ Failed to start RAG processing:', ragError);
-                            }
-                        } else {
-                            console.log('⚠️ Extracted text too short, not storing PDF data');
-                        }
-                        
-                        // Delete the temporary PDF file
-                        fs.unlinkSync(pdfFilePath);
-                        
-                    } catch (pdfError) {
-                        console.error('❌ PDF parsing error:', pdfError);
-                        
-                        // Delete the temporary PDF file if it exists
-                        if (req.files.pdf && fs.existsSync(req.files.pdf[0].path)) {
-                            fs.unlinkSync(req.files.pdf[0].path);
-                        }
-                        
-                        // Continue without PDF data
-                        console.log('⚠️ Continuing without PDF data due to parsing error');
-                    }
-                }
-
-                // Create new campaign
+                // Initialize campaign document data with proper structure
+                let campaignDocData = {
+                    originalName: null,
+                    extractedText: null,
+                    processingMethod: null,
+                    ragChunks: 0,
+                    ragSuccessCount: 0
+                };
+                
                 const campaign = new Campaign({
                     language,
                     objective,
@@ -189,6 +105,75 @@ class CampaignController {
 
                 const savedCampaign = await campaign.save();
                 console.log(`📋 Campaign created: ${savedCampaign._id}`);
+
+                // Process PDF file if uploaded (AFTER campaign is saved)
+                console.log('🔍 Checking for PDF file upload...');
+                console.log('📁 req.files:', req.files ? Object.keys(req.files) : 'No files');
+                
+                if (req.files && req.files.pdf && req.files.pdf.length > 0) {
+                    console.log('📄 PDF file found!');
+                    console.log('📄 PDF file details:');
+                    console.log('   Path:', req.files.pdf[0].path);
+                    console.log('   Name:', req.files.pdf[0].originalname);
+                    console.log('   Size:', req.files.pdf[0].size, 'bytes');
+                    console.log('   MIME Type:', req.files.pdf[0].mimetype);
+                    try {
+                        console.log('📄 Processing PDF file...');
+                        console.log('📁 PDF file path:', req.files.pdf[0].path);
+                        console.log('📁 PDF file name:', req.files.pdf[0].originalname);
+                        console.log('📁 PDF file size:', req.files.pdf[0].size, 'bytes');
+                        
+                        const pdfFilePath = req.files.pdf[0].path;
+                        const pdfBuffer = fs.readFileSync(pdfFilePath);
+                        console.log('📊 PDF buffer size:', pdfBuffer.length, 'bytes');
+                        
+                        // Use memory-only RAG service for PDF processing
+                        console.log(`🔍 Processing PDF for campaign ID: ${savedCampaign._id} (type: ${typeof savedCampaign._id})`);
+                        const ragResult = await ragService.processCampaignDocument(
+                            savedCampaign._id, 
+                            pdfBuffer, 
+                            'pdf'
+                        );
+                        
+                        if (ragResult.success) {
+                            console.log(`✅ Memory RAG processing completed successfully`);
+                            console.log(`📊 Total chunks created: ${ragResult.chunks}`);
+                            console.log(`📝 Processing method: ${ragResult.method}`);
+                            
+                            // Update campaign with RAG information
+                            await Campaign.findByIdAndUpdate(savedCampaign._id, {
+                                campaignDoc: {
+                                    originalName: req.files.pdf[0].originalname,
+                                    extractedText: ragResult.extractedText || 'PDF processed successfully',
+                                    processingMethod: ragResult.method,
+                                    ragChunks: ragResult.chunks,
+                                    ragSuccessCount: ragResult.successCount
+                                }
+                            });
+                            
+                            console.log('✅ Campaign updated with Memory RAG information');
+                        } else {
+                            console.log('⚠️ Memory RAG processing failed');
+                            console.log('📋 RAG result:', ragResult);
+                        }
+                        
+                        // Delete the temporary PDF file
+                        fs.unlinkSync(pdfFilePath);
+                        
+                    } catch (pdfError) {
+                        console.error('❌ PDF processing error:', pdfError);
+                        
+                        // Delete the temporary PDF file if it exists
+                        if (req.files.pdf && fs.existsSync(req.files.pdf[0].path)) {
+                            fs.unlinkSync(req.files.pdf[0].path);
+                        }
+                        
+                        // Continue without PDF data
+                        console.log('⚠️ Continuing without PDF data due to processing error');
+                    }
+                } else {
+                    console.log('⚠️ No PDF file uploaded for this campaign');
+                }
 
                 // Create contact documents
                 const contactDocuments = contacts.map(contact => ({
@@ -208,14 +193,21 @@ class CampaignController {
                     console.error('❌ Real call error:', error);
                 });
 
-                // Return success response
+                // Get RAG processing status
+                const ragStatus = ragService.getProcessingStatus(savedCampaign._id);
+                
+                // Return success response with Memory RAG information
                 return res.status(201).json({
                     success: true,
                     message: 'Campaign created successfully',
                     campaignId: savedCampaign._id,
                     totalContacts: contacts.length,
                     pdfProcessed: !!campaignDocData,
-                    pdfTextLength: campaignDocData ? campaignDocData.extractedText.length : 0
+                    pdfTextLength: campaignDocData && campaignDocData.extractedText ? campaignDocData.extractedText.length : 0,
+                    ragEnabled: true,
+                    ragStatus: ragStatus.status,
+                    ragChunks: ragStatus.chunks || 0,
+                    ragMethod: ragStatus.method || 'memory-only'
                 });
 
             } catch (parseError) {
@@ -326,6 +318,10 @@ class CampaignController {
 
             // Get call statistics
             const stats = await simulatorService.getCallStatistics(id);
+            
+            // Get RAG statistics
+            const ragStatus = ragService.getProcessingStatus(id);
+            const ragStats = ragService.getRAGStats();
 
             return res.status(200).json({
                 success: true,
@@ -333,6 +329,13 @@ class CampaignController {
                     campaignId: id,
                     campaignObjective: campaign.objective,
                     campaignLanguage: campaign.language,
+                    ragEnabled: true,
+                    ragStatus: ragStatus.status,
+                    ragChunks: ragStatus.chunks || 0,
+                    ragMethod: ragStatus.method || 'none',
+                    ragProcessingTime: ragStatus.endTime && ragStatus.startTime 
+                        ? Math.round((ragStatus.endTime - ragStatus.startTime) / 1000)
+                        : null,
                     ...stats
                 }
             });

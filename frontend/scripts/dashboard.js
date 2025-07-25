@@ -66,14 +66,22 @@ class DashboardManager {
     }
 
     setupFileUpload() {
-        const fileUploadArea = document.getElementById('fileUploadArea');
+        // CSV file upload
+        const csvUploadArea = document.getElementById('fileUploadArea');
         const csvFileInput = document.getElementById('csvFile');
-        const filePreview = document.getElementById('filePreview');
-        const removeFileBtn = document.getElementById('removeFile');
+        const csvFilePreview = document.getElementById('filePreview');
+        const removeCsvFileBtn = document.getElementById('removeFile');
 
-        if (fileUploadArea && csvFileInput) {
+        // PDF file upload
+        const pdfUploadArea = document.getElementById('pdfFileUploadArea');
+        const pdfFileInput = document.getElementById('pdfFile');
+        const pdfFilePreview = document.getElementById('pdfFilePreview');
+        const removePdfFileBtn = document.getElementById('removePdfFile');
+
+        // Setup CSV upload
+        if (csvUploadArea && csvFileInput) {
             // Click to upload
-            fileUploadArea.addEventListener('click', () => {
+            csvUploadArea.addEventListener('click', () => {
                 csvFileInput.click();
             });
 
@@ -81,23 +89,23 @@ class DashboardManager {
             csvFileInput.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (file) {
-                    this.handleFileSelection(file);
+                    this.handleCsvFileSelection(file);
                 }
             });
 
             // Drag and drop functionality
-            fileUploadArea.addEventListener('dragover', (e) => {
+            csvUploadArea.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                fileUploadArea.classList.add('dragover');
+                csvUploadArea.classList.add('dragover');
             });
 
-            fileUploadArea.addEventListener('dragleave', () => {
-                fileUploadArea.classList.remove('dragover');
+            csvUploadArea.addEventListener('dragleave', () => {
+                csvUploadArea.classList.remove('dragover');
             });
 
-            fileUploadArea.addEventListener('drop', (e) => {
+            csvUploadArea.addEventListener('drop', (e) => {
                 e.preventDefault();
-                fileUploadArea.classList.remove('dragover');
+                csvUploadArea.classList.remove('dragover');
                 
                 const files = e.dataTransfer.files;
                 if (files.length > 0) {
@@ -112,24 +120,74 @@ class DashboardManager {
             });
 
             // Remove file functionality
-            if (removeFileBtn) {
-                removeFileBtn.addEventListener('click', (e) => {
+            if (removeCsvFileBtn) {
+                removeCsvFileBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    this.removeFile();
+                    this.removeCsvFile();
+                });
+            }
+        }
+
+        // Setup PDF upload
+        if (pdfUploadArea && pdfFileInput) {
+            // Click to upload
+            pdfUploadArea.addEventListener('click', () => {
+                pdfFileInput.click();
+            });
+
+            // File input change
+            pdfFileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    this.handlePdfFileSelection(file);
+                }
+            });
+
+            // Drag and drop functionality
+            pdfUploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                pdfUploadArea.classList.add('dragover');
+            });
+
+            pdfUploadArea.addEventListener('dragleave', () => {
+                pdfUploadArea.classList.remove('dragover');
+            });
+
+            pdfUploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                pdfUploadArea.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const file = files[0];
+                    if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+                        pdfFileInput.files = files;
+                        this.handlePdfFileSelection(file);
+                    } else {
+                        this.showNotification('Please upload a PDF file only', 'error');
+                    }
+                }
+            });
+
+            // Remove file functionality
+            if (removePdfFileBtn) {
+                removePdfFileBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.removePdfFile();
                 });
             }
         }
     }
 
-    handleFileSelection(file) {
+    handleCsvFileSelection(file) {
         const filePreview = document.getElementById('filePreview');
-        const uploadContent = document.querySelector('.upload-content');
-        const fileName = document.querySelector('.file-name');
+        const uploadContent = document.querySelector('#fileUploadArea .upload-content');
+        const fileName = document.querySelector('#filePreview .file-name');
 
         if (filePreview && uploadContent && fileName) {
             // Validate file size (5MB limit)
             if (file.size > 5 * 1024 * 1024) {
-                this.showNotification('File size must be less than 5MB', 'error');
+                this.showNotification('CSV file size must be less than 5MB', 'error');
                 return;
             }
 
@@ -138,29 +196,67 @@ class DashboardManager {
             uploadContent.style.display = 'none';
             filePreview.style.display = 'flex';
 
-            this.showNotification('File uploaded successfully', 'success');
+            this.showNotification('CSV file uploaded successfully', 'success');
             
             // Add bounce animation
             filePreview.classList.add('bounce-in');
         }
     }
 
-    removeFile() {
+    handlePdfFileSelection(file) {
+        const filePreview = document.getElementById('pdfFilePreview');
+        const uploadContent = document.querySelector('#pdfFileUploadArea .upload-content');
+        const fileName = document.querySelector('#pdfFilePreview .file-name');
+
+        if (filePreview && uploadContent && fileName) {
+            // Validate file size (10MB limit)
+            if (file.size > 10 * 1024 * 1024) {
+                this.showNotification('PDF file size must be less than 10MB', 'error');
+                return;
+            }
+
+            // Show file preview
+            fileName.textContent = file.name;
+            uploadContent.style.display = 'none';
+            filePreview.style.display = 'flex';
+
+            this.showNotification('PDF file uploaded successfully', 'success');
+            
+            // Add bounce animation
+            filePreview.classList.add('bounce-in');
+        }
+    }
+
+    removeCsvFile() {
         const csvFileInput = document.getElementById('csvFile');
         const filePreview = document.getElementById('filePreview');
-        const uploadContent = document.querySelector('.upload-content');
+        const uploadContent = document.querySelector('#fileUploadArea .upload-content');
 
         if (csvFileInput && filePreview && uploadContent) {
             csvFileInput.value = '';
             filePreview.style.display = 'none';
             uploadContent.style.display = 'block';
             
-            this.showNotification('File removed', 'info');
+            this.showNotification('CSV file removed', 'info');
+        }
+    }
+
+    removePdfFile() {
+        const pdfFileInput = document.getElementById('pdfFile');
+        const filePreview = document.getElementById('pdfFilePreview');
+        const uploadContent = document.querySelector('#pdfFileUploadArea .upload-content');
+
+        if (pdfFileInput && filePreview && uploadContent) {
+            pdfFileInput.value = '';
+            filePreview.style.display = 'none';
+            uploadContent.style.display = 'block';
+            
+            this.showNotification('PDF file removed', 'info');
         }
     }
 
     setupCampaignForm() {
-        const campaignForm = document.getElementById('campaignForm');
+        const campaignForm = document.getElementById('unifiedCampaignForm');
         const startCampaignBtn = document.getElementById('startCampaignBtn');
 
         if (campaignForm) {
@@ -173,6 +269,7 @@ class DashboardManager {
 
     async handleCampaignSubmission() {
         const csvFile = document.getElementById('csvFile').files[0];
+        const pdfFile = document.getElementById('pdfFile').files[0];
         const language = document.getElementById('language').value;
         const callingObjective = document.getElementById('callingObjective').value.trim();
         const exampleCallFlow = document.getElementById('exampleCallFlow').value.trim();
@@ -199,6 +296,9 @@ class DashboardManager {
             // Create form data
             const formData = new FormData();
             formData.append('csv', csvFile);
+            if (pdfFile) {
+                formData.append('pdf', pdfFile);
+            }
             formData.append('language', language);
             formData.append('objective', callingObjective);
             if (exampleCallFlow) {
@@ -213,10 +313,11 @@ class DashboardManager {
             });
 
             if (response.ok && response.data.success) {
-                this.showNotification(
-                    `Campaign started successfully! 🚀 ${response.data.totalContacts} contacts added.`, 
-                    'success'
-                );
+                let message = `Campaign started successfully! 🚀 ${response.data.totalContacts} contacts added.`;
+                if (response.data.pdfProcessed) {
+                    message += ` PDF processed (${response.data.pdfTextLength} characters extracted).`;
+                }
+                this.showNotification(message, 'success');
                 console.log('✅ Campaign created:', response.data);
             } else {
                 throw new Error(response.data?.message || 'Campaign creation failed');
@@ -256,10 +357,11 @@ class DashboardManager {
     }
 
     resetCampaignForm() {
-        const campaignForm = document.getElementById('campaignForm');
+        const campaignForm = document.getElementById('unifiedCampaignForm');
         if (campaignForm) {
             campaignForm.reset();
-            this.removeFile();
+            this.removeCsvFile();
+            this.removePdfFile();
         }
     }
 

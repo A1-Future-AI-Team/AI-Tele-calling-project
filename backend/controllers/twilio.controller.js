@@ -245,10 +245,11 @@ class TwilioController {
             const memoryKey = { callSid: CallSid || 'init', campaignId };
             console.log(`🧠 Using memory key: ${(CallSid || 'init')}::${campaignId}`);
             try {
-                // --- TEMPORARILY DISABLED RAG - Using original LLM only ---
-                console.log('🔄 Using original LLM system (RAG temporarily disabled)');
+                // --- RAG ENABLED - Using enhanced LLM with document context ---
+                console.log('🔄 Using enhanced LLM system with RAG integration');
                 
                 const { generateReply } = await import('../services/llm.service.js');
+                console.log(`🔍 Generating AI reply for campaign ID: ${campaignId} (type: ${typeof campaignId})`);
                 const aiReply = await generateReply({
                     objective,
                     language,
@@ -257,8 +258,8 @@ class TwilioController {
                     userInput: 'Start the call',
                     campaignId: campaignId
                 });
-                console.log('✅ Original LLM response generated successfully');
-                // --- END TEMPORARY DISABLE ---
+                console.log('✅ Enhanced LLM response with RAG generated successfully');
+                // --- END RAG ENABLE ---
                 
                 // Save the initial AI message to memory for this call/campaign
                 saveMessage({ ...memoryKey, role: 'assistant', content: aiReply });
@@ -631,8 +632,8 @@ class TwilioController {
                     delete global._failCounts[failCountKey];
                 }
                 
-                // --- TEMPORARILY DISABLED RAG - Using original LLM only ---
-                console.log('🔄 Using original LLM system for transcription (RAG temporarily disabled)');
+                // --- RAG ENABLED - Using enhanced LLM with document context for transcription ---
+                console.log('🔄 Using enhanced LLM system with RAG integration for transcription');
                 
                 // Use callSid+campaignId as the only memory key
                 let history = getConversationHistory({ callSid, campaignId });
@@ -652,8 +653,8 @@ class TwilioController {
                     campaignId: campaignId
                 });
                 saveMessage({ callSid, campaignId, role: 'assistant', content: aiReply });
-                console.log('✅ Original LLM response generated successfully');
-                // --- END TEMPORARY DISABLE ---
+                console.log('✅ Enhanced LLM response with RAG generated successfully');
+                // --- END RAG ENABLE ---
                 
                 // Validate response alignment
                 if (aiReply.toLowerCase().includes('samsung') || aiReply.toLowerCase().includes('galaxy') || aiReply.toLowerCase().includes('smartphone')) {
