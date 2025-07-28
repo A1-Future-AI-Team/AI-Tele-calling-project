@@ -109,6 +109,7 @@ class CampaignController {
                 // Process PDF file if uploaded (AFTER campaign is saved)
                 console.log('🔍 Checking for PDF file upload...');
                 console.log('📁 req.files:', req.files ? Object.keys(req.files) : 'No files');
+                console.log('📁 req.files details:', req.files ? JSON.stringify(req.files, null, 2) : 'No files');
                 
                 if (req.files && req.files.pdf && req.files.pdf.length > 0) {
                     console.log('📄 PDF file found!');
@@ -117,15 +118,27 @@ class CampaignController {
                     console.log('   Name:', req.files.pdf[0].originalname);
                     console.log('   Size:', req.files.pdf[0].size, 'bytes');
                     console.log('   MIME Type:', req.files.pdf[0].mimetype);
+                    console.log('   Field Name:', req.files.pdf[0].fieldname);
+                    
                     try {
                         console.log('📄 Processing PDF file...');
                         console.log('📁 PDF file path:', req.files.pdf[0].path);
                         console.log('📁 PDF file name:', req.files.pdf[0].originalname);
                         console.log('📁 PDF file size:', req.files.pdf[0].size, 'bytes');
                         
+                        // Check if file exists
+                        if (!fs.existsSync(req.files.pdf[0].path)) {
+                            throw new Error(`PDF file not found at path: ${req.files.pdf[0].path}`);
+                        }
+                        
                         const pdfFilePath = req.files.pdf[0].path;
                         const pdfBuffer = fs.readFileSync(pdfFilePath);
                         console.log('📊 PDF buffer size:', pdfBuffer.length, 'bytes');
+                        
+                        // Check if buffer is valid
+                        if (pdfBuffer.length === 0) {
+                            throw new Error('PDF file is empty');
+                        }
                         
                         // Use memory-only RAG service for PDF processing
                         console.log(`🔍 Processing PDF for campaign ID: ${savedCampaign._id} (type: ${typeof savedCampaign._id})`);
@@ -139,6 +152,7 @@ class CampaignController {
                             console.log(`✅ Memory RAG processing completed successfully`);
                             console.log(`📊 Total chunks created: ${ragResult.chunks}`);
                             console.log(`📝 Processing method: ${ragResult.method}`);
+                            console.log(`📄 Extracted text length: ${ragResult.textLength} characters`);
                             
                             // Update campaign with RAG information
                             await Campaign.findByIdAndUpdate(savedCampaign._id, {
@@ -162,6 +176,7 @@ class CampaignController {
                         
                     } catch (pdfError) {
                         console.error('❌ PDF processing error:', pdfError);
+                        console.error('❌ PDF error stack:', pdfError.stack);
                         
                         // Delete the temporary PDF file if it exists
                         if (req.files.pdf && fs.existsSync(req.files.pdf[0].path)) {
@@ -173,6 +188,7 @@ class CampaignController {
                     }
                 } else {
                     console.log('⚠️ No PDF file uploaded for this campaign');
+                    console.log('📁 Available files:', req.files ? Object.keys(req.files) : 'None');
                 }
 
                 // Create contact documents

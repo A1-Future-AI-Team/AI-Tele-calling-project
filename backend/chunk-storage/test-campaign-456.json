@@ -1,5 +1,5 @@
 {
-  "campaignId": "test-campaign-123",
+  "campaignId": "test-campaign-456",
   "chunks": [
     {
       "chunk": "This is a test PDF document for debugging purposes.\nIt contains information about our product features and pricing.\nOur main product costs $99.99 and includes premium support.\nCustomers can contact us at support@example.com for assistance.\nWe offer a 30-day money-back guarantee on all purchases.",
@@ -389,9 +389,9 @@
         0,
         0.12309149097933272
       ],
-      "campaignId": "test-campaign-123"
+      "campaignId": "test-campaign-456"
     }
   ],
-  "createdAt": "2025-07-28T13:54:55.963Z",
+  "createdAt": "2025-07-28T13:54:56.106Z",
   "chunkCount": 1
 }

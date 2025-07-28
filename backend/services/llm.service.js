@@ -40,20 +40,21 @@ async function getRAGContext(campaignId, userInput, language) {
     console.log('🔍 Retrieving RAG context for campaign:', campaignId);
     
     // Use the memory-only RAG service
-    const relevantChunks = await ragService.retrieveContext(campaignId, userInput, 3);
+    const relevantChunks = await ragService.retrieveContext(campaignId, userInput, 5);
     
     if (relevantChunks.length === 0) {
       console.log('⚠️ No relevant chunks found from memory RAG service');
       return '';
     }
     
-    // Format context information
+    // Format context information with better structure
     const contextInfo = relevantChunks
-      .map((chunk, index) => `${index + 1}. ${chunk.chunk}`)
+      .map((chunk, index) => `📋 Information ${index + 1} (Relevance: ${(chunk.score * 100).toFixed(1)}%):\n${chunk.chunk}`)
       .join('\n\n');
     
     console.log(`📄 RAG Context prepared with ${relevantChunks.length} chunks`);
     console.log(`🏆 Top similarity score: ${relevantChunks[0]?.score?.toFixed(3)}`);
+    console.log(`📄 Context preview: ${contextInfo.substring(0, 200)}...`);
     
     return contextInfo;
     
@@ -99,17 +100,18 @@ Your job is: ${objective}
 - Do not recite the objective
 - Never speak English if ${language} is selected
 - Avoid robotic or translated phrases — sound natural and human
-- Be polite, professional, and concise like a real phone agent
+- Be polite, professional, and engaging like a real phone agent
 - Use native, fluent expressions and tone
 - Do not ask for feedback or talk about yourself
 - Stay in character at all times
-- Use the provided context information to give more accurate and helpful responses
-- If context is provided, reference it naturally in your conversation
-- Keep responses concise (under 50 words) for better phone conversation flow
+- ALWAYS use the provided context information to give detailed, accurate responses
+- Reference specific details from the context naturally in your conversation
+- Be informative and helpful, don't be too brief
+- Use the context to provide specific information about products, features, pricing, etc.
 
 ${sampleFlow ? `Here's how a typical call should sound:\n${sampleFlow.trim()}` : ''}
 
-${contextInfo ? `📄 Relevant Information from Campaign Document:\n${contextInfo}\n\nUse this information to provide accurate and helpful responses.` : ''}
+${contextInfo ? `📄 CRITICAL: Use this information from the uploaded document to answer questions:\n${contextInfo}\n\nIMPORTANT: Always reference specific details from this document when responding. Use the information to provide accurate, detailed answers about products, features, pricing, specifications, etc.` : ''}
 `.trim();
 
     const messages = [
@@ -127,7 +129,7 @@ ${contextInfo ? `📄 Relevant Information from Campaign Document:\n${contextInf
       messages,
       temperature: 0.7,
       top_p: 1,
-      max_tokens: 150
+      max_tokens: 300
     });
 
     const reply = completion.choices?.[0]?.message?.content?.trim();
@@ -144,3 +146,5 @@ ${contextInfo ? `📄 Relevant Information from Campaign Document:\n${contextInf
     return fallback;
   }
 }
+
+export { getRAGContext };
