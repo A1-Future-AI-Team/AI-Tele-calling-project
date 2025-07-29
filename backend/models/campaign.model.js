@@ -16,6 +16,10 @@ const campaignSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    campaignDoc: {
+        originalName: String,
+        extractedText: String
+    },
     createdAt: {
         type: Date,
         default: Date.now

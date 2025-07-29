@@ -24,4 +24,7 @@ router.post('/status', twilioController.handleCallStatus);
 // Add real-time call status fetch endpoint
 router.get('/call-status/:callSid', twilioController.getCallStatusBySid);
 
+// Add conversation statistics endpoint
+router.get('/conversation-stats', twilioController.getConversationStats);
+
 export default router; 

@@ -29,14 +29,21 @@ const storage = multer.diskStorage({
     }
 });
 
-// File filter to accept only CSV files
+// File filter to accept CSV and PDF files
 const fileFilter = (req, file, cb) => {
-    if (file.mimetype === 'text/csv' || 
-        file.mimetype === 'application/csv' || 
-        path.extname(file.originalname).toLowerCase() === '.csv') {
+    const allowedMimeTypes = [
+        'text/csv',
+        'application/csv',
+        'application/pdf'
+    ];
+    
+    const allowedExtensions = ['.csv', '.pdf'];
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    
+    if (allowedMimeTypes.includes(file.mimetype) || allowedExtensions.includes(fileExtension)) {
         cb(null, true);
     } else {
-        cb(new Error('Only CSV files are allowed'), false);
+        cb(new Error('Only CSV and PDF files are allowed'), false);
     }
 };
 
@@ -45,12 +52,15 @@ const upload = multer({
     storage: storage,
     fileFilter: fileFilter,
     limits: {
-        fileSize: 5 * 1024 * 1024 // 5MB limit
+        fileSize: 10 * 1024 * 1024 // 10MB limit for PDF files
     }
 });
 
 // Route definitions
-router.post('/start', upload.single('csv'), campaignController.startCampaign.bind(campaignController));
+router.post('/start', upload.fields([
+    { name: 'csv', maxCount: 1 },
+    { name: 'pdf', maxCount: 1 }
+]), campaignController.startCampaign.bind(campaignController));
 router.get('/list', campaignController.getCampaigns.bind(campaignController));
 router.get('/:id/stats', campaignController.getCampaignStats.bind(campaignController));
 router.get('/:id', campaignController.getCampaignById.bind(campaignController));
@@ -74,10 +84,10 @@ router.use((error, req, res, next) => {
         });
     }
     
-    if (error.message === 'Only CSV files are allowed') {
+    if (error.message === 'Only CSV and PDF files are allowed') {
         return res.status(400).json({
             success: false,
-            message: 'Only CSV files are allowed'
+            message: 'Only CSV and PDF files are allowed'
         });
     }
     

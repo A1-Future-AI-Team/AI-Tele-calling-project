@@ -120,22 +120,26 @@
                 </div>
             </section>
             
-            <!-- Campaign Actions Section -->
-            <section class="campaign-section">
-                <div class="campaign-card">
-                    <div class="campaign-header">
-                        <h2 class="campaign-title">Start a New Campaign</h2>
-                        <p class="campaign-description">Upload your contact list and configure your AI-powered telecalling campaign</p>
+            <!-- Unified Campaign Form Section -->
+            <section class="unified-campaign-section">
+                <div class="unified-campaign-card">
+                    <div class="unified-campaign-header">
+                        <h2 class="unified-campaign-title">
+                            <i class="fas fa-rocket"></i>
+                            Create AI Campaign
+                        </h2>
+                        <p class="unified-campaign-description">Upload contacts and documents to create your AI-powered telecalling campaign</p>
                     </div>
                     
-                    <form class="campaign-form" id="campaignForm">
-                        <div class="form-row">
-                            <div class="form-group">
+                    <form class="unified-campaign-form" id="unifiedCampaignForm">
+                        <div class="form-grid">
+                            <!-- Contact List Upload -->
+                            <div class="form-group contact-upload-group">
                                 <label for="csvFile">
                                     <i class="fas fa-file-csv"></i>
                                     Contact List (CSV)
                                 </label>
-                                <div class="file-upload-area" id="fileUploadArea">
+                                <div class="file-upload-area contact-upload-area" id="fileUploadArea">
                                     <input type="file" id="csvFile" accept=".csv" hidden>
                                     <div class="upload-content">
                                         <i class="fas fa-cloud-upload-alt upload-icon"></i>
@@ -151,32 +155,59 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
+                            
+                            <!-- PDF Document Upload -->
+                            <div class="form-group pdf-upload-group">
+                                <label for="pdfFile">
+                                    <i class="fas fa-file-pdf"></i>
+                                    Campaign Document (PDF)
+                                </label>
+                                <div class="file-upload-area pdf-upload-area" id="pdfFileUploadArea">
+                                    <input type="file" id="pdfFile" accept=".pdf" hidden>
+                                    <div class="upload-content">
+                                        <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                                        <p class="upload-text">Drop PDF file here or click to browse</p>
+                                        <span class="upload-hint">Supports .pdf files up to 10MB</span>
+                                    </div>
+                                    <div class="file-preview" id="pdfFilePreview" style="display: none;">
+                                        <i class="fas fa-file-pdf"></i>
+                                        <span class="file-name"></span>
+                                        <button type="button" class="remove-file" id="removePdfFile">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Language Selection -->
+                            <div class="form-group language-group">
                                 <label for="language">
                                     <i class="fas fa-globe"></i>
-                                    Language
+                                    Campaign Language
                                 </label>
                                 <select id="language" class="form-select">
                                     <option value="English">English</option>
                                     <option value="Hindi">Hindi</option>
                                     <option value="Bengali">Bengali</option>
-                                    <!-- <option value="Tamil">Tamil</option>
-                                    <option value="Telugu">Telugu</option>
-                                    <option value="Malayalam">Malayalam</option>
-                                    <option value="Kannada">Kannada</option>
-                                    <option value="Gujarati">Gujarati</option>
-                                    <option value="Punjabi">Punjabi</option>
-                                    <option value="Marathi">Marathi</option>
-                                    <option value="Urdu">Urdu</option> -->
                                 </select>
                             </div>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
+                            
+                            <!-- PDF Language (Optional) -->
+                            <div class="form-group pdf-language-group">
+                                <label for="pdfLanguage">
+                                    <i class="fas fa-language"></i>
+                                    PDF Language (Auto-detect)
+                                </label>
+                                <select id="pdfLanguage" class="form-select">
+                                    <option value="">Auto-detect from PDF</option>
+                                    <option value="English">English</option>
+                                    <option value="Hindi">Hindi</option>
+                                    <option value="Bengali">Bengali</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Calling Objective -->
+                            <div class="form-group objective-group">
                                 <label for="callingObjective">
                                     <i class="fas fa-brain"></i>
                                     Calling Objective
@@ -189,10 +220,9 @@
                                     required
                                 ></textarea>
                             </div>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
+                            
+                            <!-- Example Call Flow -->
+                            <div class="form-group callflow-group">
                                 <label for="exampleCallFlow">
                                     <i class="fas fa-comments"></i>
                                     Example Call Flow (optional)
@@ -200,7 +230,7 @@
                                 <textarea 
                                     id="exampleCallFlow" 
                                     class="form-textarea" 
-                                    rows="4"
+                                    rows="3"
                                     placeholder="e.g., Hello! I'm calling to check how your order experience was. Can you rate it from 1–5?"
                                 ></textarea>
                             </div>
@@ -210,7 +240,7 @@
                             <button type="submit" class="start-campaign-btn" id="startCampaignBtn">
                                 <span class="btn-text">
                                     <i class="fas fa-rocket"></i>
-                                    Start Campaign
+                                    Launch Campaign
                                 </span>
                                 <div class="btn-loader" style="display: none;">
                                     <div class="spinner"></div>

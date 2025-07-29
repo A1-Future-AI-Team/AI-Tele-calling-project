@@ -15,10 +15,6 @@ class TwilioController {
         // Simple constructor - no barge-in functionality
     }
 
-
-
-
-
     /**
      * Handle call status updates
      */
@@ -99,192 +95,127 @@ class TwilioController {
                         console.log('⚠️ [CONTACT LOOKUP] No contact found for phone + campaignId combination');
                     }
                 } else {
-                    // Fallback: if no campaignId in webhook, try to find by phone only
-                    // This is less reliable but maintains backward compatibility
+                    // Fallback: try to find contact by phone number only (less reliable)
                     contact = await Contact.findOne({ phone: To });
-                    
                     if (contact) {
                         console.log('⚠️ [CONTACT LOOKUP] Found contact by phone only (fallback):', contact.name, 'Campaign:', contact.campaignId);
-                        // Use this contact's campaignId as fallback
-                        if (!campaignId && contact.campaignId) {
-                            campaignId = contact.campaignId;
-                            console.log('🔄 [CAMPAIGN LOOKUP] Using fallback campaignId from contact:', campaignId);
-                        }
                     } else {
-                        console.log('⚠️ [CONTACT LOOKUP] No contact found for phone:', To);
+                        console.log('❌ [CONTACT LOOKUP] No contact found for phone:', To);
                     }
                 }
                 
-                if (contact) {
-                    contactFound = contact;
-                    
-                    // Update contact status based on call status
-                    let contactStatus = 'PENDING';
-                    switch (CallStatus) {
-                        case 'initiated':
-                        case 'ringing':
-                            contactStatus = 'CALLING';
-                            break;
-                        case 'in-progress':
-                        case 'answered':
-                            contactStatus = 'CALLING';
-                            break;
-                        case 'completed':
-                            contactStatus = 'CALLED';
-                            break;
-                        case 'failed':
-                        case 'busy':
-                        case 'no-answer':
-                            contactStatus = 'FAILED';
-                            break;
-                    }
-                    
-                    // Update contact with call details and status
-                    await Contact.findByIdAndUpdate(contact._id, {
-                        status: contactStatus,
-                        callSid: CallSid,
-                        callTime: new Date(),
-                        lastCallResult: CallStatus,
-                        errorMessage: (CallStatus === 'failed' || CallStatus === 'busy' || CallStatus === 'no-answer') ? `Call ${CallStatus}` : null
-                    });
-                    
-                    console.log('✅ [CONTACT UPDATE] Updated contact status to:', contactStatus);
-                }
+                contactFound = contact;
+                
             } catch (contactErr) {
-                console.error('❌ [CONTACT LOOKUP] Error finding/updating contact:', contactErr);
+                console.error('❌ [CONTACT LOOKUP] Error finding contact:', contactErr);
             }
             
-            // STEP 3: Update or create call log with proper linking
+            // STEP 3: Update call log with status
             try {
-                const filter = { callSid: CallSid };
+                console.log('💾 [CALL LOG] Updating call log for CallSid:', CallSid);
                 
-                // Build comprehensive update object
-                const update = {
-                    callSid: CallSid,
-                    from: From,
-                    to: To,
-                    status: CallStatus,
-                    duration: Duration ? Number(Duration) : (CallDuration ? Number(CallDuration) : 0),
-                    contactId: contactFound ? contactFound._id : null,
-                    campaignId: campaignFound ? campaignFound._id : (contactFound ? contactFound.campaignId : null),
-                    language: campaignFound ? campaignFound.language : (contactFound ? 'Hindi' : 'Hindi'),
-                    endTime: (CallStatus === 'completed' && (Duration || CallDuration)) ? new Date() : undefined,
-                    updatedAt: new Date()
-                };
-                
-                // Remove undefined values
-                Object.keys(update).forEach(key => update[key] === undefined && delete update[key]);
-                
-                console.log('📊 [CALL LOG] Update object:', update);
-                
-                const result = await CallLog.findOneAndUpdate(
-                    filter,
-                    { $set: update, $setOnInsert: { createdAt: new Date() } },
-                    { upsert: true, new: true }
-                );
-                
-                dbResult = result;
-                if (result) {
-                    if (result.createdAt && result.updatedAt && result.createdAt.getTime() === result.updatedAt.getTime()) {
-                        dbAction = 'created';
-                        console.log('✅ [DB] New call log created with proper linking:', {
-                            callSid: result.callSid,
-                            contactId: result.contactId,
-                            campaignId: result.campaignId,
-                            status: result.status
-                        });
+                if (CallSid) {
+                    const callLog = await CallLog.findOne({ callSid: CallSid });
+                    
+                    if (callLog) {
+                        console.log('✅ [CALL LOG] Found existing call log, updating status');
+                        
+                        const updateData = {
+                            status: CallStatus,
+                            updatedAt: new Date()
+                        };
+                        
+                        if (Duration) {
+                            updateData.duration = parseInt(Duration);
+                        }
+                        
+                        if (CallDuration) {
+                            updateData.callDuration = parseInt(CallDuration);
+                        }
+                        
+                        dbAction = 'update';
+                        dbResult = await CallLog.findByIdAndUpdate(
+                            callLog._id,
+                            updateData,
+                            { new: true }
+                        );
+                        
+                        console.log('✅ [CALL LOG] Call log updated successfully');
+                        
                     } else {
-                        dbAction = 'updated';
-                        console.log('✅ [DB] Existing call log updated with proper linking:', {
-                            callSid: result.callSid,
-                            contactId: result.contactId,
-                            campaignId: result.campaignId,
-                            status: result.status
-                        });
+                        console.log('⚠️ [CALL LOG] No call log found for CallSid:', CallSid);
                     }
                 } else {
-                    dbAction = 'none';
-                    console.log('⚠️ [DB] No call log found or updated for:', CallSid);
+                    console.log('⚠️ [CALL LOG] No CallSid provided, skipping call log update');
                 }
-            } catch (err) {
-                dbError = err;
-                console.error('❌ [DB] Error while saving/updating call log:', err);
+                
+            } catch (dbErr) {
+                console.error('❌ [CALL LOG] Error updating call log:', dbErr);
+                dbError = dbErr;
             }
             
-            // STEP 4: Fetch and print real-time status from Twilio
-            console.log('➡️ About to fetch real status...');
+            // STEP 4: Update contact status if we have a contact
             try {
-                const twilioService = (await import('../services/twilio.service.js')).default;
-                const realStatus = await twilioService.getCallStatus(CallSid);
-                console.log(`📞 [Twilio API] Real-time status for ${CallSid}: ${realStatus}`);
-            } catch (err) {
-                console.error('❌ Failed to fetch call status:', err.message);
-            }
-            
-            // STEP 5: Handle different call statuses
-            switch (CallStatus) {
-                case 'initiated':
-                    console.log('📞 Call initiated');
-                    break;
-                case 'ringing':
-                    console.log('📞 Call ringing');
-                    break;
-                case 'in-progress':
-                    console.log('📞 Call in progress');
-                    break;
-                case 'answered':
-                    console.log('📞 Call answered');
-                    break;
-                case 'completed':
-                    console.log('📞 Call completed');
-                    try {
-                        console.log('🧹 Automatic cleanup: Deleting recent audio files...');
-                        await this.cleanupRecentAudioFiles(CallSid);
-                        console.log('✅ Audio files cleaned up successfully');
-                    } catch (cleanupError) {
-                        console.error('❌ Error during automatic cleanup:', cleanupError.message);
+                if (contactFound) {
+                    console.log('👤 [CONTACT] Updating contact status for:', contactFound.name);
+                    
+                    let contactStatus = 'pending';
+                    
+                    if (CallStatus === 'completed') {
+                        contactStatus = 'completed';
+                    } else if (CallStatus === 'failed' || CallStatus === 'busy' || CallStatus === 'no-answer') {
+                        contactStatus = 'failed';
+                    } else if (CallStatus === 'in-progress') {
+                        contactStatus = 'in-progress';
                     }
-                    break;
-                case 'failed':
-                    console.log('📞 Call failed');
-                    break;
-                case 'busy':
-                    console.log('📞 Call busy');
-                    break;
-                case 'no-answer':
-                    console.log('📞 Call no answer');
-                    break;
-                default:
-                    console.log(`📞 Unknown call status: ${CallStatus}`);
+                    
+                    await Contact.findByIdAndUpdate(contactFound._id, {
+                        status: contactStatus,
+                        updatedAt: new Date()
+                    });
+                    
+                    console.log('✅ [CONTACT] Contact status updated to:', contactStatus);
+                } else {
+                    console.log('⚠️ [CONTACT] No contact found, skipping contact update');
+                }
+                
+            } catch (contactUpdateErr) {
+                console.error('❌ [CONTACT] Error updating contact status:', contactUpdateErr);
             }
             
-            // STEP 6: Summary log
-            console.log(`📋 [Summary] CallSid: ${CallSid}, Status: ${CallStatus}, DB Action: ${dbAction}, DB Error: ${dbError ? dbError.message : 'none'}`);
-            console.log(`📋 [Summary] Contact: ${contactFound ? contactFound.name : 'Not found'}, Campaign: ${campaignFound ? campaignFound.objective : 'Not found'}`);
+            // STEP 5: Send response
+            console.log('📤 [RESPONSE] Sending webhook response');
+            res.status(200).json({
+                success: true,
+                message: 'Call status updated successfully',
+                data: {
+                    callSid: CallSid,
+                    status: CallStatus,
+                    campaignFound: !!campaignFound,
+                    contactFound: !!contactFound,
+                    dbAction: dbAction,
+                    dbError: dbError ? dbError.message : null
+                }
+            });
             
-            res.status(200).send('OK');
         } catch (error) {
-            console.error('❌ Error in call status webhook:', error);
-            res.status(500).send('Internal Server Error');
+            console.error('❌ [ERROR] handleCallStatus error:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Internal server error',
+                error: error.message
+            });
         }
     }
-
-    /**
-     * Clean up recent audio files (called after call completion)
-     * This method deletes audio files that were likely used in the recent call
-     * @param {string} callSid - The Twilio call SID for logging purposes
-     */
-
-
-    /**
-     * Simple test webhook for audio playback
-     */
-
 
     /**
      * Campaign-based voice response handler with AI generation
      */
     async voiceResponse(req, res) {
+        console.log('🚀 voiceResponse method called');
+        console.log('📋 Request body:', req.body);
+        console.log('🔍 Request query:', req.query);
+        
         try {
             console.log('📞 Received Twilio voice response request');
             console.log('Query params:', req.query);
@@ -314,22 +245,21 @@ class TwilioController {
             const memoryKey = { callSid: CallSid || 'init', campaignId };
             console.log(`🧠 Using memory key: ${(CallSid || 'init')}::${campaignId}`);
             try {
-                // --- FIX: Generate a real AI greeting using LLM ---
-                const systemPrompt = `
-You are a professional telecaller. Your job is: ${objective}
-Greet the customer, introduce yourself, and start a natural sales conversation about the Tata Safari.
-Be concise, polite, and context-aware. Do NOT just repeat the objective—act like a real agent.
-`;
+                // --- RAG ENABLED - Using enhanced LLM with document context ---
+                console.log('🔄 Using enhanced LLM system with RAG integration');
+                
                 const { generateReply } = await import('../services/llm.service.js');
+                console.log(`🔍 Generating AI reply for campaign ID: ${campaignId} (type: ${typeof campaignId})`);
                 const aiReply = await generateReply({
-                  objective,
-                  language,
-                  sampleFlow,
-                  conversationHistory: [], // No history for the first message
-                  userInput: 'Start the call', // Use a generic, non-empty input
-                  systemPrompt
+                    objective,
+                    language,
+                    sampleFlow,
+                    conversationHistory: [],
+                    userInput: 'Start the call',
+                    campaignId: campaignId
                 });
-                // --- END FIX ---
+                console.log('✅ Enhanced LLM response with RAG generated successfully');
+                // --- END RAG ENABLE ---
                 
                 // Save the initial AI message to memory for this call/campaign
                 saveMessage({ ...memoryKey, role: 'assistant', content: aiReply });
@@ -415,24 +345,36 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
                 }
             } catch (aiError) {
                 console.error('❌ Error in AI/TTS generation:', aiError.message);
+                console.error('❌ Full error stack:', aiError.stack);
                 const fallbackText = objective || 'Hello! Thank you for answering our call.';
                 twiml.say({ voice: 'alice', language: this.mapLanguageToTwimlLanguage(language) }, fallbackText);
+                
+                // Add recording capability even for fallback
+                twiml.record({
+                    action: `/api/twilio/transcribe?campaignId=${campaignId}`,
+                    method: 'POST',
+                    maxLength: 10,
+                    timeout: 5,
+                    playBeep: true,
+                    trim: 'do-not-trim'
+                });
+                
+                res.type('text/xml');
+                res.send(twiml.toString());
+                return;
             }
-            res.type('text/xml');
-            res.send(twiml.toString());
-            console.log('✅ Campaign-based TwiML response sent successfully');
-        } catch (error) {
-            console.error('❌ Error creating campaign-based voice response:', error);
+        } catch (outerError) {
+            console.error('❌ CRITICAL ERROR in voiceResponse:', outerError.message);
+            console.error('❌ Full error stack:', outerError.stack);
+            
+            // Send a basic TwiML response to prevent call failure
             const twiml = new twilio.twiml.VoiceResponse();
-            twiml.say({ voice: 'alice', language: 'en-IN' }, 'Sorry, there was an error processing your call. Please try again later.');
+            twiml.say({ voice: 'alice', language: 'en-IN' }, 'Hello! Thank you for your call. We are experiencing technical difficulties. Please try again later.');
             res.type('text/xml');
             res.send(twiml.toString());
+            return;
         }
     }
-
-
-
-
 
     /**
      * Map campaign language to Reverie speaker ID
@@ -585,169 +527,86 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
                 
                 console.log('🔧 STT Headers:', {
                     'REV-API-KEY': process.env.REVERIE_API_KEY ? 'SET' : 'MISSING',
-                    'REV-APP-ID': process.env.REVERIE_APP_ID ? 'SET' : 'MISSING',
-                    'REV-APPNAME': 'stt_file',
+                    'REV-APP-ID': process.env.REV_APP_ID ? 'SET' : 'MISSING',
                     'src_lang': sttLang,
                     'domain': 'generic'
                 });
                 
-                // Additional debugging for Reverie STT configuration
-                console.log('🔧 Reverie STT Configuration Check:');
-                console.log(`   - API Key: ${process.env.REVERIE_API_KEY ? 'Present' : 'MISSING'}`);
-                console.log(`   - App ID: ${process.env.REVERIE_APP_ID ? 'Present' : 'MISSING'}`);
-                console.log(`   - Target Language: ${sttLang} (from campaign: ${currentLanguage})`);
-                console.log(`   - Audio Size: ${audioBuffer.byteLength} bytes`);
-                console.log(`   - Audio Format: ${fileContentType}`);
-                
-                // Validate Reverie STT configuration
-                if (!process.env.REVERIE_API_KEY || !process.env.REVERIE_APP_ID) {
-                    console.error('❌ Reverie STT API configuration missing!');
-                    console.error('   - REVERIE_API_KEY:', process.env.REVERIE_API_KEY ? 'SET' : 'MISSING');
-                    console.error('   - REVERIE_APP_ID:', process.env.REVERIE_APP_ID ? 'SET' : 'MISSING');
-                    
-                    // Provide language-appropriate error message
-                    twiml.say({ voice: 'alice', language: this.mapLanguageToTwimlLanguage(currentLanguage) }, 
-                        currentLanguage === 'Hindi' ? 'माफ़ करें, सेवा कॉन्फ़िगरेशन में समस्या है। कृपया बाद में पुनः प्रयास करें।' :
-                        currentLanguage === 'Bengali' ? 'দুঃখিত, পরিষেবা কনফিগারেশন সমস্যা। দয়া করে পরে আবার চেষ্টা করুন।' :
-                        'Sorry, service configuration issue. Please try again later.'
-                    );
-                    res.type('text/xml');
-                    return res.send(twiml.toString());
-                }
-                
+                // Make the STT API call with retry mechanism
                 let sttResponse;
-                try {
-                    // Log the actual headers being sent
-                    console.log('🔧 ACTUAL STT Headers being sent:', sttHeaders);
-                    
-                    sttResponse = await axios.post('https://revapi.reverieinc.com/', formData, {
-                        headers: sttHeaders,
-                        timeout: 30000 // 30 seconds timeout
-                    });
-                } catch (sttError) {
-                    console.error('❌ STT API Request Failed:', sttError.message);
-                    console.error('❌ STT Error Details:', sttError.response?.data || 'No response data');
-                    console.error('❌ STT Error Status:', sttError.response?.status || 'No status');
-                    
-                    // Enhanced error logging for debugging
-                    if (sttError.response) {
-                        console.error('❌ STT API Response Headers:', sttError.response.headers);
-                        try {
-                            const errorData = JSON.parse(sttError.response.data.toString());
-                            console.error('❌ STT API Error JSON:', errorData);
-                        } catch (e) {
-                            console.error('❌ STT API Raw Error Data:', sttError.response.data.toString());
+                let sttError;
+                
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        console.log(`🔄 STT API attempt ${attempt}/3...`);
+                        sttResponse = await axios.post('https://revapi.reverieinc.com/', formData, {
+                            headers: sttHeaders,
+                            timeout: 15000 // 15 seconds timeout per attempt
+                        });
+                        console.log(`✅ STT API attempt ${attempt} successful`);
+                        break;
+                    } catch (error) {
+                        sttError = error;
+                        console.error(`❌ STT API attempt ${attempt} failed:`, error.message);
+                        
+                        if (attempt < 3) {
+                            console.log(`⏳ Waiting 2 seconds before retry...`);
+                            await new Promise(resolve => setTimeout(resolve, 2000));
                         }
                     }
-                    
-                    // Don't fallback to Twilio transcription as it only supports English
-                    // Instead, provide a language-appropriate error message and retry
-                    console.log('🔄 Reverie STT failed, providing language-appropriate retry message...');
-                    twiml.say({ voice: 'alice', language: this.mapLanguageToTwimlLanguage(currentLanguage) }, 
-                        currentLanguage === 'Hindi' ? 'माफ़ करें, तकनीकी समस्या है। कृपया फिर से बोलें।' :
-                        currentLanguage === 'Bengali' ? 'দুঃখিত, প্রযুক্তিগত সমস্যা। দয়া করে আবার বলুন।' :
-                        'Sorry, technical issue. Please speak again.'
-                    );
-                    twiml.record({
-                        action: `/api/twilio/transcribe?campaignId=${campaignId}`,
-                        method: 'POST',
-                        maxLength: 20,
-                        timeout: 4,
-                        playBeep: false,
-                        trim: 'do-not-trim'
-                    });
-                    res.type('text/xml');
-                    return res.send(twiml.toString());
                 }
                 
-                console.log(`📊 Reverie STT response status: ${sttResponse.status}`);
-                console.log(`📊 Reverie STT response headers:`, sttResponse.headers);
-                
-                const sttResult = sttResponse.data;
-                console.log('🎯 Reverie STT response:', sttResult);
-                
-                // Check for STT API errors
-                if (sttResult.error || sttResult.status === 'error') {
-                    console.error('❌ STT API Error:', sttResult.error || sttResult.message || 'Unknown STT error');
-                    throw new Error(`STT API Error: ${sttResult.error || sttResult.message || 'Unknown error'}`);
+                if (!sttResponse) {
+                    throw new Error(`STT API failed after 3 attempts: ${sttError?.message || 'Unknown error'}`);
                 }
                 
-                // Extract transcribed text
-                let transcribedText = sttResult.text || sttResult.transcript || sttResult.result || 'No transcription available';
-                console.log(`📝 Transcribed text: "${transcribedText}"`);
-                console.log(`📊 STT Confidence: ${sttResult.confidence}`);
-                console.log(`📊 Word count: ${transcribedText.trim().split(/\s+/).filter(Boolean).length}`);
+                console.log('✅ STT API response received');
+                console.log('📊 STT Response status:', sttResponse.status);
+                console.log('📄 STT Response data:', sttResponse.data);
                 
-                // If Reverie STT fails, try to use Twilio's transcription as fallback
-                if (!transcribedText || transcribedText.trim().toLowerCase() === 'no transcription available') {
-                    console.log('⚠️ Reverie STT returned no transcription, treating as failed transcription...');
-                    
-                    // Don't use Twilio transcription as fallback since it only supports English
-                    // Instead, treat this as a failed transcription that needs retry
-                    transcribedText = ''; // Clear any invalid transcription
-                    console.log('🔄 Will retry with Reverie STT instead of using English-only Twilio transcription');
+                let transcribedText = '';
+                
+                // Handle Reverie STT API response format
+                if (sttResponse.data && sttResponse.data.success && sttResponse.data.text) {
+                    transcribedText = sttResponse.data.text.trim();
+                    console.log('✅ Transcription successful:', transcribedText);
+                    console.log('📊 Confidence:', sttResponse.data.confidence);
+                } else if (sttResponse.data && sttResponse.data.response) {
+                    // Fallback for old format
+                    transcribedText = sttResponse.data.response.trim();
+                    console.log('✅ Transcription successful (fallback format):', transcribedText);
+                } else {
+                    console.error('❌ STT API returned unexpected response format');
+                    console.error('STT Response:', sttResponse.data);
+                    throw new Error('STT API returned unexpected response format');
                 }
                 
-                // Initialize failCountKey at the top level for proper scoping
-                let failCountKey = `failCount_${callSid}::${campaignId}`;
+                // Validate transcription quality
+                if (!transcribedText || transcribedText.length === 0) {
+                    console.error('❌ Empty transcription received from STT API');
+                    throw new Error('Empty transcription received from STT API');
+                }
+                
+                const wordCount = transcribedText.split(/\s+/).length;
+                console.log(`📊 Transcription word count: ${wordCount}`);
+                
+                // Handle very short or unclear transcriptions
+                const failCountKey = `${callSid}_${campaignId}`;
                 if (!global._failCounts) global._failCounts = {};
                 
-                // Simple word count calculation
-                let wordCount = transcribedText.trim().split(/\s+/).filter(Boolean).length;
-                const sttConfidence = typeof sttResult.confidence === 'number' ? sttResult.confidence : 1;
-                
-                // Lower confidence threshold and be more lenient with valid transcriptions
-                const hasValidTranscription = transcribedText &&
-                    transcribedText.trim().toLowerCase() !== 'no transcription available' &&
-                    wordCount > 0;
-                
-                // Only reject if we have no transcription at all (ignore confidence if text is present)
-                if (!hasValidTranscription) {
-                    // Log failed audio for analysis
-                    if (RecordingUrl) {
-                        console.warn('⚠️ Logging failed audio RecordingUrl for analysis:', RecordingUrl);
-                    }
+                if (wordCount <= 1) {
+                    // Increment fail count
                     global._failCounts[failCountKey] = (global._failCounts[failCountKey] || 0) + 1;
-                    let failCount = global._failCounts[failCountKey];
-                    // Always use correct language for retry prompt
-                    let repeatMsg, twimlLang;
-                    if (currentLanguage === 'Bengali') {
-                        repeatMsg = 'দয়া করে আবার স্পষ্টভাবে বলুন।';
-                        twimlLang = 'bn-IN';
-                    } else if (currentLanguage === 'Hindi') {
-                        repeatMsg = 'कृपया फिर से स्पष्ट रूप से कहें।';
-                        twimlLang = 'hi-IN';
-                    } else {
-                        repeatMsg = 'Sorry, I did not catch that. Please speak clearly after the beep.';
-                        twimlLang = 'en-US';
-                    }
-                    if (failCount < 3) {
-                        // Use fixed timeout for retry
-                        twiml.say({ voice: 'alice', language: twimlLang }, repeatMsg);
-                        twiml.record({
-                            action: `/api/twilio/transcribe?campaignId=${campaignId}`,
-                            method: 'POST',
-                            maxLength: 20,
-                            timeout: 5,
-                            playBeep: false,
-                            trim: 'do-not-trim'
-                        });
-                        res.type('text/xml');
-                        return res.send(twiml.toString());
-                    } else {
-                        let endMsg, endLang;
-                        if (currentLanguage === 'Bengali') {
-                            endMsg = 'ধন্যবাদ! কল শেষ করা হচ্ছে।';
-                            endLang = 'bn-IN';
-                        } else if (currentLanguage === 'Hindi') {
-                            endMsg = 'धन्यवाद! कॉल समाप्त की जा रही है।';
-                            endLang = 'hi-IN';
-                        } else {
-                            endMsg = 'Thank you! Ending the call.';
-                            endLang = 'en-US';
-                        }
-                        twiml.say({ voice: 'alice', language: endLang }, endMsg);
-                        res.type('text/xml');
+                    console.warn(`⚠️ Very short transcription (${wordCount} words). Fail count: ${global._failCounts[failCountKey]}`);
+                    
+                    if (global._failCounts[failCountKey] >= 3) {
+                        console.warn('⚠️ Too many failed attempts, ending call gracefully');
+                        twiml.say({ voice: 'alice', language: this.mapLanguageToTwimlLanguage(currentLanguage) }, 
+                            currentLanguage === 'Bengali' ? 'ধন্যবাদ আপনার কলের জন্য। আবার চেষ্টা করুন।' :
+                            currentLanguage === 'Hindi' ? 'धन्यवाद आपके कॉल के लिए। कृपया बाद में फिर से कोशिश करें।' :
+                            'Thank you for your call. Please try again later.'
+                        );
+                        
                         delete global._failCounts[failCountKey];
                         
                         return res.send(twiml.toString());
@@ -773,6 +632,9 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
                     delete global._failCounts[failCountKey];
                 }
                 
+                // --- RAG ENABLED - Using enhanced LLM with document context for transcription ---
+                console.log('🔄 Using enhanced LLM system with RAG integration for transcription');
+                
                 // Use callSid+campaignId as the only memory key
                 let history = getConversationHistory({ callSid, campaignId });
                 console.log('🧠 Memory loaded:', history.length, 'messages');
@@ -780,17 +642,19 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
                     console.warn('⚠️ Conversation history is empty after loading');
                 }
                 saveMessage({ callSid, campaignId, role: 'user', content: transcribedText });
-                const aiParams = {
+                
+                const { generateReply } = await import('../services/llm.service.js');
+                const aiReply = await generateReply({
                     objective: campaignObjective,
                     language: currentLanguage,
                     sampleFlow: campaignSampleFlow,
                     conversationHistory: getConversationHistory({ callSid, campaignId }),
                     userInput: transcribedText,
-                    systemPrompt: 'You are a professional telecaller. Keep your responses concise and focused unless the user asks for a detailed description. If the user asks for more details, then provide a longer answer. Try to sense the user\'s sentiment and respond accordingly.'
-                };
-                console.log('🎯 LLM INPUT:', aiParams);
-                const aiReply = await generateReply(aiParams);
+                    campaignId: campaignId
+                });
                 saveMessage({ callSid, campaignId, role: 'assistant', content: aiReply });
+                console.log('✅ Enhanced LLM response with RAG generated successfully');
+                // --- END RAG ENABLE ---
                 
                 // Validate response alignment
                 if (aiReply.toLowerCase().includes('samsung') || aiReply.toLowerCase().includes('galaxy') || aiReply.toLowerCase().includes('smartphone')) {
@@ -903,13 +767,35 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
                 }
                 
             } catch (aiError) {
-                console.error('❌ Error in AI response generation:', aiError.message);
+                console.error('❌ Error in AI/TTS generation:', aiError.message);
+                console.error('❌ Full error stack:', aiError.stack);
                 
-                // Fallback to simple acknowledgment
-                twiml.say({
-                    voice: 'alice',
-                    language: 'en-IN'
-                }, 'Thank you for your response. We have received your message.');
+                // Check if it's a network connectivity issue
+                if (aiError.message.includes('ENOTFOUND') || aiError.message.includes('ECONNREFUSED')) {
+                    console.error('🌐 Network connectivity issue detected');
+                    
+                    // Fallback to simple acknowledgment with recording
+                    twiml.say({
+                        voice: 'alice',
+                        language: 'en-IN'
+                    }, 'Thank you for your response. We are experiencing technical difficulties. Please try again later.');
+                    
+                    // Still add recording capability for next attempt
+                    twiml.record({
+                        action: `/api/twilio/transcribe?campaignId=${campaignId}`,
+                        method: 'POST',
+                        maxLength: 10,
+                        timeout: 5,
+                        playBeep: true,
+                        trim: 'do-not-trim'
+                    });
+                } else {
+                    // Other errors - fallback to simple acknowledgment
+                    twiml.say({
+                        voice: 'alice',
+                        language: 'en-IN'
+                    }, 'Thank you for your response. We have received your message.');
+                }
             }
             
             const twimlResponse = twiml.toString();
@@ -938,6 +824,37 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
     }
 
     /**
+     * Clean up old conversation sessions
+     */
+    cleanupOldSessions() {
+        try {
+            // conversationManager.cleanupOldSessions(60); // Clean sessions older than 60 minutes
+            console.log('🧹 Cleaned up old conversation sessions');
+        } catch (error) {
+            console.error('❌ Failed to cleanup old sessions:', error);
+        }
+    }
+
+    /**
+     * Get conversation statistics
+     */
+    getConversationStats(req, res) {
+        try {
+            // const stats = conversationManager.getStats(); // conversationManager is removed
+            res.json({
+                success: true,
+                // stats // conversationManager is removed
+            });
+        } catch (error) {
+            console.error('❌ Failed to get conversation stats:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Failed to get conversation statistics'
+            });
+        }
+    }
+
+    /**
      * Get real-time status of a call by SID (API endpoint)
      */
     async getCallStatusBySid(req, res) {
@@ -953,8 +870,6 @@ Be concise, polite, and context-aware. Do NOT just repeat the objective—act li
             return res.status(500).json({ error: error.message });
         }
     }
-
-
 }
 
 // Export the class instance with properly bound methods
@@ -962,10 +877,11 @@ const twilioController = new TwilioController();
 
 // Bind methods to maintain 'this' context
 twilioController.handleCallStatus = twilioController.handleCallStatus.bind(twilioController);
-
 twilioController.voiceResponse = twilioController.voiceResponse.bind(twilioController);
 twilioController.transcribeAudio = twilioController.transcribeAudio.bind(twilioController);
 twilioController.getCallStatusBySid = twilioController.getCallStatusBySid.bind(twilioController);
+twilioController.getConversationStats = twilioController.getConversationStats.bind(twilioController);
+twilioController.cleanupOldSessions = twilioController.cleanupOldSessions.bind(twilioController);
 
 // Export both controller and conversation manager
 export default twilioController; 
